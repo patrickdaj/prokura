@@ -1,0 +1,33 @@
+{
+  "_comment": "Drive-shaped permissions manifest: each entry mirrors a Google Drive file's permission export (owner + explicit viewers). Ingestion writes these as OpenFGA document owner/viewer tuples BEFORE the file's chunks become queryable. viewers entry '*' means public (user:*). In v1 this manifest is replaced by a live pull of real Drive file permissions via the broker's Google grant; the FGA-as-end-user retrieval filter is unchanged.",
+  "documents": [
+    {
+      "doc_id": "secret-roadmap",
+      "file": "secret-roadmap.txt",
+      "owner": "alice",
+      "viewers": ["alice"],
+      "note": "Adversarial protected doc — the top embedding hit for the acquisition-timeline query; alice (viewer) may retrieve it, bob may not."
+    },
+    {
+      "doc_id": "public-handbook",
+      "file": "public-handbook.txt",
+      "owner": "carol",
+      "viewers": ["*"],
+      "note": "Public (user:*) — visible to everyone."
+    },
+    {
+      "doc_id": "bob-notes",
+      "file": "bob-notes.txt",
+      "owner": "bob",
+      "viewers": [],
+      "note": "Owner-only — no explicit viewers; only bob (as owner) sees it."
+    },
+    {
+      "doc_id": "shared-budget",
+      "file": "shared-budget.txt",
+      "owner": "carol",
+      "viewers": ["alice", "bob"],
+      "note": "Per-user shared — alice and bob, not carol-only."
+    }
+  ]
+}

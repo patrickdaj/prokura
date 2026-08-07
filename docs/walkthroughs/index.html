@@ -1,0 +1,184 @@
+<meta charset="utf-8">
+<title>Prokura — Guided Walkthrough</title>
+<link rel="stylesheet" href="walkthrough.css">
+
+<div class="rail"><div class="wrap">
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav">
+    <a class="cur" href="index.html">Walkthrough</a>
+    <a href="../blog/index.html">Blog</a>
+    <a href="../architecture.md">Architecture</a>
+  </div>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Guided walkthrough · the whole demo, one sitting</p>
+    <h1>Watch an agent act for a user — and stop exactly where it should</h1>
+    <p class="thesis">A single MCP client, holding only an <code>aud=mcp-server</code> token, walks the whole chain: it <b>discovers</b> the server, <b>registers itself</b>, <b>logs the user in</b>, gets a <b>consent-gated</b> third-party token, has a human <b>approve</b> a gated email, and runs a RAG query that returns <b>only what the user may see</b>. Every screen below is a faithful recreation rendered from a real run of the stack — real correlation IDs, real audit lines, real rankings.</p>
+    <div class="meta">
+      <span class="chip ok">Reproducible · docker compose up</span>
+      <span class="chip">real MCP client</span>
+      <span class="chip">login → consent → token → approval → RAG</span>
+    </div>
+  </header>
+  <hr>
+  <section>
+    <p class="lead">The blogs are the build log — <i>why</i> each piece works the way it does. This is the follow-along tour — <i>here it is running, step through it</i>. Each stage links to its flow deep-dive and its milestone blog. Drive it yourself first:</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">your shell · repo root</span></div>
+      <div class="body term"><pre><span class="p">$</span> docker compose up -d
+<span class="p">$</span> python demo/run_demo.py     <span class="c"># a real MCP client, narrated to watch</span>
+<span class="o">ACT 1</span> connect (aud=mcp-server)   <span class="o">ACT 2</span> consent-gated token
+<span class="o">ACT 3</span> human-approved email       <span class="o">ACT 4</span> FGA-filtered RAG
+<span class="g">✓</span> <span class="o">everything below, driven live — then verify with</span> pytest tests/smoke</pre></div>
+    </div>
+  </section>
+
+  <!-- STAGE 1 -->
+  <section><div class="stage"><div class="idx">01</div><div>
+    <h3>Discover, register, log in</h3>
+    <p>An unauthenticated <code>POST /mcp</code> returns <code>401</code> pointing at RFC 9728 metadata that names Keycloak. The client registers dynamically (RFC 7591), runs OAuth 2.1 + PKCE, and receives an <code>aud=mcp-server</code> token. <code>tools/list</code> then advertises the three tools that drive the chain.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">MCP client · :8140/mcp</span></div>
+      <div class="body term"><pre><span class="c"># POST /mcp with no token</span>
+<span class="b">HTTP/1.1 401 Unauthorized</span>
+<span class="k">WWW-Authenticate:</span> Bearer resource_metadata="…/.well-known/oauth-protected-resource"
+<span class="c"># → discover Keycloak, register (RFC 7591), OAuth 2.1 + PKCE →</span>
+token.aud = <span class="g">"mcp-server"</span>   sub = alice
+
+<span class="c"># tools/list</span>
+[ <span class="g">get_provider_token</span>, <span class="g">send_email</span>, <span class="g">rag_search</span> ]</pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> a real client reaches the server with the standard MCP handshake — no operator in the loop. → <a href="mcp.html">MCP surface deep-dive</a> · <a href="../blog/m4-mcp-authorization.html">M4 blog</a></div>
+  </div></div></section>
+
+  <!-- STAGE 2 -->
+  <section><div class="stage"><div class="idx">02</div><div>
+    <h3>Per-agent consent</h3>
+    <p>Registration grants nothing. Before the agent can touch a user's third-party grant, the user consents to <i>this specific agent</i> — the approval writes the OpenFGA <code>can_use</code> tuple (the broker is the sole writer, enforcing <code>operator == owner</code>).</p>
+    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">:8110/consent · authenticated</span></div>
+      <div class="body"><div class="card">
+        <div class="brand">P R O K U R A</div>
+        <h4>Allow this agent to use your grant?</h4>
+        <div class="kv">
+          <span class="k">agent</span><span class="v">mcp-server</span>
+          <span class="k">provider</span><span class="v">acme</span>
+          <span class="k">grant owner</span><span class="v">alice (you)</span>
+        </div>
+        <div class="btns"><span class="btn ok">Allow</span><span class="btn no">Deny</span></div>
+      </div></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> consent — not registration — is the gate, and it is per-agent. → <a href="brokering.html">Brokering deep-dive</a> · <a href="../blog/m2-token-broker.html">M2 blog</a></div>
+  </div></div></section>
+
+  <!-- STAGE 3 -->
+  <section><div class="stage"><div class="idx">03</div><div>
+    <h3>A brokered provider token</h3>
+    <p>The <code>get_provider_token</code> tool exchanges the inbound token for an <code>aud=token-broker</code> one (never forwarding it) and calls the broker, which checks the grant, the requested scopes, and the consent tuple — then returns a <b>short-lived access token only</b>.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">rag_search / get_provider_token result</span></div>
+      <div class="body term"><pre><span class="c"># tools/call get_provider_token { provider: "acme" }</span>
+{
+  <span class="k">"access_token"</span>: <span class="g">"eyJ…"</span>,
+  <span class="k">"expires_in"</span>: <span class="g">900</span>,        <span class="c">// ≤ 15 min, always</span>
+  <span class="k">"scope"</span>: <span class="g">"read:acme"</span>
+  <span class="c">// no refresh_token — it never leaves OpenBao</span>
+}</pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the agent gets a bounded access token; the refresh credential stays in OpenBao. → <a href="delegation.html">Delegation deep-dive</a> · <a href="../blog/m1-token-exchange.html">M1 blog</a></div>
+  </div></div></section>
+
+  <!-- STAGE 4 -->
+  <section><div class="stage"><div class="idx">04</div><div>
+    <h3>Human approval on a gated action</h3>
+    <p>The first <code>send_email</code> arrives with no action token. The tools-API refuses with a <code>428 approval_required</code> and registers the exact <code>{action, params}</code> it saw. A human approves <i>that</i> in the trusted UI (never agent-authored text); the retry executes once, and the mail lands in the Mailpit sink.</p>
+    <div class="flowgrid" style="grid-template-columns:1fr 1fr">
+      <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">:8120 approval UI</span></div>
+        <div class="body"><div class="card">
+          <div class="brand">P R O K U R A</div>
+          <h4>Approve this action?</h4>
+          <div class="kv">
+            <span class="k">agent</span><span class="v">mcp-server</span>
+            <span class="k">action</span><span class="v">email.send</span>
+            <span class="k">to</span><span class="v">boss@prokura.local</span>
+            <span class="k">subject</span><span class="v">MCP approved report</span>
+          </div>
+          <div class="btns"><span class="btn ok">Approve</span><span class="btn no">Deny</span></div>
+        </div></div>
+      </div>
+      <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">:8025 Mailpit sink</span></div>
+        <div class="body audit">
+          <div class="ln"><span class="ok">✓ delivered</span></div>
+          <div class="ln"><span class="dim">to</span> boss@prokura.local</div>
+          <div class="ln"><span class="dim">subj</span> MCP approved report</div>
+          <div class="ln"><span class="dim">from</span> tools-api (single-use token consumed)</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the approved action is the one the <i>server</i> saw; the token is single-use and hash-bound. → <a href="approval.html">Approval deep-dive</a> · <a href="../blog/m3-human-approval.html">M3 blog</a></div>
+  </div></div></section>
+
+  <!-- STAGE 5 -->
+  <section><div class="stage"><div class="idx">05</div><div>
+    <h3>RAG that stops at the permission line</h3>
+    <p>The <code>rag_search</code> tool embeds the query and pulls the top-K candidates from pgvector, then authorizes them against OpenFGA <b>as the end user</b>. The protected <code>secret-roadmap</code> is the #1 hit for both alice and bob — but bob holds no <code>viewer</code> tuple, so it is filtered <i>after</i> ranking.</p>
+    <div class="flowgrid" style="grid-template-columns:1fr 1fr">
+      <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">alice · viewer</span></div>
+        <div class="body"><div class="rank">
+          <div class="row top"><span class="r">#1</span><span class="doc">secret-roadmap</span><span class="cos">0.68</span><span class="v yes">✓ shown</span></div>
+          <div class="row"><span class="r">#2</span><span class="doc">public-handbook</span><span class="cos">0.09</span><span class="v yes">✓</span></div>
+          <div class="row"><span class="r">#4</span><span class="doc">shared-budget</span><span class="cos">0.00</span><span class="v yes">✓</span></div>
+        </div><div class="cap" style="margin-top:10px">answer contains "Meridian acquisition"</div></div>
+      </div>
+      <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">bob · not a viewer</span></div>
+        <div class="body"><div class="rank">
+          <div class="row top filtered"><span class="r">#1</span><span class="doc">secret-roadmap</span><span class="cos">0.68</span><span class="v no">✕ filtered</span></div>
+          <div class="row"><span class="r">#2</span><span class="doc">public-handbook</span><span class="cos">0.09</span><span class="v yes">✓</span></div>
+          <div class="row"><span class="r">#3</span><span class="doc">bob-notes</span><span class="cos">0.09</span><span class="v yes">✓</span></div>
+        </div><div class="cap" style="margin-top:10px">answer never mentions "Meridian"</div></div>
+      </div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the confused-deputy is dead — the top hit leaks to no one who lacks the tuple. <code>candidates=4, allowed=3</code>. → <a href="rag.html">RAG deep-dive</a> · <a href="../blog/m5-rag-authorization.html">M5 blog</a></div>
+  </div></div></section>
+
+  <!-- STAGE 6 -->
+  <section><div class="stage"><div class="idx">06</div><div>
+    <h3>Watch it as one trace</h3>
+    <p>The whole thing is one linked trace. In the Prokura Console, click the <code>POST /mcp</code> trace, expand the <code>rag.search</code> span, and hit <b>"show correlated audit logs"</b> — jumping from the trace to its audit records in Loki, joined by the correlation id.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">:8095 console · span waterfall</span></div>
+      <div class="body">
+        <div class="wf">
+          <div class="sp"><span class="nm"><span class="svc svc-mcp">mcp</span> tool.rag_search</span><span class="track"><span class="bar bar-mcp" style="left:2%;width:96%"></span></span><span class="d">20.5</span></div>
+          <div class="sp"><span class="nm"><span class="svc svc-kc">keycloak</span> mcp_exchange</span><span class="track"><span class="bar bar-kc" style="left:4%;width:28%"></span></span><span class="d">6.8</span></div>
+          <div class="sp"><span class="nm"><span class="svc svc-rag">rag</span> rag.search</span><span class="track"><span class="bar bar-rag" style="left:40%;width:48%"></span></span><span class="d">9.3</span></div>
+          <div class="sp"><span class="nm"><span class="svc svc-rag">rag</span> pgvector.top_k</span><span class="track"><span class="bar bar-rag" style="left:44%;width:20%"></span></span><span class="d">4.2</span></div>
+          <div class="sp"><span class="nm"><span class="svc svc-fga">openfga</span> BatchCheck</span><span class="track"><span class="bar bar-fga" style="left:78%;width:9%"></span></span><span class="d">0.23</span></div>
+        </div>
+        <div style="margin-top:12px; border-left:2px solid var(--hair); padding-left:10px" class="audit">
+          <div class="ln"><span class="t">13:08:34</span> <span class="tag">mcp_audit</span> <span class="id">correlation_id=02491050…f75fc0</span> <span class="ok">decision=rag_retrieved</span> user=bob tool=rag_search allowed=3</div>
+          <div class="ln"><span class="t">13:08:34</span> <span class="tag">rag_audit</span> <span class="id">correlation_id=02491050…f75fc0</span> <span class="ok">decision=retrieved</span> user=bob candidates=4 allowed=3</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>What it proves:</b> "what happened" (the trace) joins to "the audit record of it" (the logs) under one id. Real trace <code>22491050…</code>, real audit lines.</div>
+  </div></div></section>
+
+  <section>
+    <p class="kicker">Go deeper</p>
+    <h2>Each flow, on its own</h2>
+    <div class="flowgrid">
+      <a class="flowcard" href="delegation.html"><div class="f">FLOW A</div><h3>Delegation</h3><p>Real login + consent → a scoped, single-audience, short-lived token.</p></a>
+      <a class="flowcard" href="brokering.html"><div class="f">FLOW B</div><h3>Token brokering</h3><p>Grant → OpenBao → consent-gated, scope-checked hand-out.</p></a>
+      <a class="flowcard" href="approval.html"><div class="f">FLOW C</div><h3>Human approval</h3><p>Reactive step-up, trusted rendering, single-use tokens.</p></a>
+      <a class="flowcard" href="rag.html"><div class="f">FLOW D</div><h3>FGA-filtered RAG</h3><p>Authorize as the end user; the adversarial leakage proof.</p></a>
+      <a class="flowcard" href="mcp.html"><div class="f">SURFACE</div><h3>The MCP server</h3><p>Discovery, DCR, no token passthrough — the headline surface.</p></a>
+      <a class="flowcard" href="postmortem.html"><div class="f">CAPSTONE</div><h3>Postmortem</h3><p>Reconstruct one action from trace + logs + metrics alone.</p></a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Build log</div><a href="../blog/index.html">Milestone blog series →</a></div>
+      <div style="text-align:right"><div class="lab">As built</div><a href="../architecture.md">Architecture →</a></div>
+    </div>
+    <p class="note">Screens are faithful recreations rendered from real runs of the compose stack (real correlation IDs, audit lines, and rankings), consistent with the illustration style of the milestone blogs.</p>
+  </footer>
+</div>

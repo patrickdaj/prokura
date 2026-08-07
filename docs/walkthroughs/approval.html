@@ -1,0 +1,97 @@
+<meta charset="utf-8">
+<title>Prokura Walkthrough — Human Approval (Flow C)</title>
+<link rel="stylesheet" href="walkthrough.css">
+<div class="rail"><div class="wrap">
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav"><a href="index.html">← Walkthrough</a><a href="../blog/m3-human-approval.html">M3 blog</a></div>
+</div></div>
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Flow C · human-approval deep-dive</p>
+    <h1>A human approves the exact action — not the agent's word for it</h1>
+    <p class="thesis">Some actions need a person. When the agent calls <code>send_email</code>, the server
+      refuses, stores the payload, and asks a human to approve <b>what the server saw</b> — rendered in a
+      trusted surface, not from anything the agent wrote. Approval yields a <b>single-use, hash-bound</b>
+      token; the action then runs exactly once. Every screen is captured live.</p>
+    <div class="meta"><span class="chip">CIBA step-up</span><span class="chip">trusted rendering</span><span class="chip">single-use</span><span class="chip ok">hash-bound</span></div>
+  </header>
+  <hr>
+
+  <section><div class="stage"><div class="idx">01</div><div>
+    <h3>The agent asks; the server refuses and registers the real action</h3>
+    <p>The first <code>send_email</code> carries no approval. The resource server responds <code>428</code>,
+      stores the payload server-side, and returns a reference — no email is sent.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">tool: send_email(...)</span></div>
+      <div class="body term"><pre><span class="p">$</span> tool.send_email { to:"board@prokura.local", subject:"Q3 board update…", body:"…" }
+<span class="b">428</span> <span class="o">{"error":"approval_required",</span>
+     <span class="o">"ref":"apr-722076c4e2e97d59e6f6769f"}</span>   <span class="c">// payload stored server-side</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> a sensitive action can't proceed on the agent's say-so; the server takes custody of the exact payload.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">02</div><div>
+    <h3>A human approves — in a trusted surface, on the server's payload</h3>
+    <p>CIBA pushes the request to the user's device; they open the approval screen. The details are
+      <b>rendered by the approval service from stored data</b> — the agent cannot influence what the human
+      sees. Alice reads the real <code>to</code>/<code>subject</code>/<code>body</code> and clicks Approve.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8120 — trusted approval UI</span></div>
+      <div class="body"><img src="img/flowC-approval.png" alt="Trusted approval UI showing agent mcp-server, action email.send, and the server-stored to/subject/body with Approve/Deny"></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the human approves <i>the action the server holds</i> — not agent-supplied text — closing the substitution gap.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">03</div><div>
+    <h3>Approved → the agent runs it exactly once → the mail lands</h3>
+    <p>With approval, the retry presents a single-use token; the tool verifies it against the stored hash
+      and sends. Here is the delivered message in the Mailpit sink — matching the approved payload byte for byte.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8025 — Mailpit</span></div>
+      <div class="body"><img src="img/flowC-mailpit.png" alt="Mailpit showing the delivered mail: Q3 board update, to board@prokura.local"></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the agent really acts — but only the approved action, and only after a human said yes.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">04</div><div>
+    <h3>Replay is refused — the token is single-use</h3>
+    <p>Try the same approved token again and it's gone. One approval authorizes exactly one execution.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">tools-api · replay probe</span></div>
+      <div class="body term"><pre><span class="p">$</span> tool.send_email { …, action_token:"apr-722076….&lt;secret&gt;" }   <span class="c"># second use</span>
+<span class="b">409</span> <span class="o">{"error":"action token already consumed"}</span>   <span class="c">// audit: replay_refused</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> approval is not a reusable capability — it is bound to one action, once.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">05</div><div>
+    <h3>The approved execution — as one linked trace</h3>
+    <p>Pulled live from the Tempo API: the retry decomposed across four services. Note the
+      <code>approval.consume</code> → <code>POST /consume</code> gate — the hash check and single-use
+      consumption — happening <i>before</i> <code>email.send</code>.</p>
+    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8095 — send_email, decomposed</span></div>
+      <div class="body">
+<div class="wf wide">
+<div class="legend"><span><i class="bar-appr"></i>approval</span><span><i class="bar-kc"></i>keycloak</span><span><i class="bar-mcp"></i>mcp</span><span><i class="bar-tools"></i>tools-api</span><span style="margin-left:auto">trace db623dab0324d9bc… · 8 key spans · 43 ms end-to-end</span></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>POST /mcp</div><div class="track"><div class="bar bar-mcp" style="left:0.0%;width:100.0%"></div></div><div class="d">42.7</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>tool.send_email</div><div class="track"><div class="bar bar-mcp" style="left:1.9%;width:97.0%"></div></div><div class="d">41.5</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>keycloak.mcp_exchange</div><div class="track"><div class="bar bar-mcp" style="left:2.0%;width:29.6%"></div></div><div class="d">12.7</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:18.0%;width:12.8%"></div></div><div class="d">5.5</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-tools">tools-api</span>POST /tools/email/send</div><div class="track"><div class="bar bar-tools" style="left:43.7%;width:54.7%"></div></div><div class="d">23.4</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-tools">tools-api</span>approval.consume</div><div class="track"><div class="bar bar-tools" style="left:44.8%;width:39.7%"></div></div><div class="d">17.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-appr">approval</span>POST /consume (verify + single-use)</div><div class="track"><div class="bar bar-appr" style="left:59.4%;width:24.5%"></div></div><div class="d">10.5</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-tools">tools-api</span>email.send</div><div class="track"><div class="bar bar-tools" style="left:84.7%;width:12.8%"></div></div><div class="d">5.5</div></div>
+</div>
+      </div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the verification gate is on the execution path — reconstructable from telemetry, not taken on trust.</div>
+  </div></div></section>
+
+  <section>
+    <h2>What this flow guarantees</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>The approved action is the one the <b>server</b> stored — the human never sees agent-authored text.</span></li>
+      <li><span class="ck">✓</span><span>Approval yields a <b>single-use</b> token, <b>hash-bound</b> to the exact payload; replay is refused.</span></li>
+      <li><span class="ck">✓</span><span>The action runs <b>exactly once</b>, and only after a human decision relayed via CIBA.</span></li>
+    </ul>
+    <p style="margin-top:18px"></p>
+    <div class="callout">Decisions: CIBA via Keycloak's built-in channel <a href="../adr/0006-keycloak-s-built-in-ciba-http-channel-no-custom-java-spi.md">ADR-0006</a>; notify-only, decisions only through the authenticated surface <a href="../adr/0007-ntfy-is-notify-only-decisions-only-through-the-authenticated.md">ADR-0007</a>; single-use action tokens <a href="../adr/0008-single-use-action-token-enforced-by-the-approval-service.md">ADR-0008</a>.</div>
+  </section>
+  <footer><div class="nextlink"><div><div class="lab">Next flow</div><a href="rag.html">Flow D · FGA-filtered RAG →</a></div><div style="text-align:right"><div class="lab">Build log</div><a href="../blog/m3-human-approval.html">M3 blog →</a></div></div></footer>
+</div>

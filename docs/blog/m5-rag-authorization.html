@@ -1,0 +1,394 @@
+<meta charset="utf-8">
+<title>Prokura — M5: RAG Authorization</title>
+<style>
+  :root{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+      --ink:#10151c; --muted:#566372; --faint:#8794a2;
+      --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+  }
+  :root[data-theme="light"]{
+    --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+    --ink:#10151c; --muted:#566372; --faint:#8794a2;
+    --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16.5px; line-height:1.62;
+    background-image:radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 62%);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+
+  /* ---- progress rail ---- */
+  .rail{border-bottom:1px solid var(--hair); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter:blur(8px);}
+  .rail .wrap{display:flex; align-items:center; justify-content:space-between; height:56px;}
+  .mark{font-family:var(--sans); font-weight:600; letter-spacing:.42em; font-size:13px; color:var(--ink);}
+  .steps{display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;}
+  .steps span{color:var(--faint);}
+  .steps .cur{color:var(--accent);}
+  .steps .done{color:var(--muted);}
+  .steps i{color:var(--faint); font-style:normal;}
+
+  /* ---- hero ---- */
+  .hero{padding:70px 0 34px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 18px;}
+  h1{font-size:clamp(34px,6vw,52px); line-height:1.04; letter-spacing:-.02em; font-weight:640; margin:0 0 20px; text-wrap:balance;}
+  .thesis{font-size:20px; line-height:1.5; color:var(--muted); margin:0; max-width:64ch; text-wrap:pretty;}
+  .thesis b{color:var(--ink); font-weight:600;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px; font-family:var(--mono); font-size:12px;}
+  .chip{border:1px solid var(--border); border-radius:999px; padding:4px 11px; color:var(--muted); letter-spacing:.03em;}
+  .chip.status{border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); color:var(--ok);}
+  .chip.status::before{content:"●"; margin-right:6px; font-size:9px; vertical-align:1px;}
+
+  /* ---- sections ---- */
+  section{padding:34px 0;}
+  .kicker{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 6px;}
+  h2{font-size:26px; letter-spacing:-.01em; font-weight:620; margin:0 0 16px; text-wrap:balance;}
+  h3{font-size:16px; margin:0 0 6px; font-weight:620;}
+  p{margin:0 0 15px;}
+  .lead{color:var(--muted);}
+  hr{border:0; border-top:1px solid var(--hair); margin:0;}
+
+  /* ---- numbers ---- */
+  .nums{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .nums div{background:var(--panel); padding:18px 16px;}
+  .nums .n{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .nums .l{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;}
+  @media(max-width:620px){ .nums{grid-template-columns:repeat(2,1fr);} }
+
+  /* ---- architecture diagram ---- */
+  .diagram{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:26px 22px 20px;}
+  .flowrow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap;}
+  .node{flex:1 1 0; min-width:120px; background:var(--panel2); border:1px solid var(--border); border-radius:11px;
+    padding:12px 13px; position:relative;}
+  .node .t{font-weight:620; font-size:13.5px;}
+  .node .s{font-family:var(--mono); font-size:11px; color:var(--faint); margin-top:2px; letter-spacing:.02em;}
+  .node.trust{border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 16%,transparent) inset;}
+  .arrow{align-self:center; color:var(--faint); font-family:var(--mono); padding:0 6px; font-size:15px;}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; font-family:var(--mono); font-size:11.5px; color:var(--muted);}
+  .legend span::before{content:"■"; margin-right:6px;}
+  .legend .tcb::before{color:var(--accent);}
+  .legend .ext::before{color:var(--faint);}
+  .caption{font-family:var(--mono); font-size:11.5px; color:var(--faint); margin-top:14px; letter-spacing:.02em; text-align:center;}
+
+  /* ---- ledger (numbered sequence) ---- */
+  .ledger{border-top:1px solid var(--hair);}
+  .entry{display:grid; grid-template-columns:44px 1fr; gap:18px; padding:20px 0; border-bottom:1px solid var(--hair);}
+  .entry .idx{font-family:var(--mono); font-size:13px; color:var(--accent); padding-top:2px; letter-spacing:.02em;}
+  .entry h3{margin-bottom:4px;}
+  .entry p{margin:0; color:var(--muted); font-size:15px;}
+  .entry code, code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2); border:1px solid var(--hair);
+    border-radius:5px; padding:1px 5px; color:var(--ink);}
+  .gate{display:inline-block; font-family:var(--mono); font-size:11px; color:var(--ok); border:1px solid color-mix(in srgb,var(--ok) 40%,var(--border));
+    border-radius:5px; padding:0 6px; margin-right:5px; letter-spacing:.02em;}
+
+  /* ---- decisions register ---- */
+  .reg{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .reg .row{background:var(--panel); padding:18px 20px;}
+  .reg .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:7px; display:inline-block;}
+  .tag.learn{color:var(--learn);}
+  .tag.dec{color:var(--accent);}
+  .reg h3{font-size:15.5px; margin-bottom:5px;}
+  .reg p{margin:0; font-size:14.5px; color:var(--muted);}
+
+  /* ---- "seeing it work": discovery card + audit ---- */
+  .show{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media(max-width:720px){ .show{grid-template-columns:1fr;} }
+  .frame{background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; display:flex; flex-direction:column;}
+  .frame .bar{display:flex; align-items:center; gap:7px; padding:9px 13px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--border);}
+  .frame .cap{padding:11px 14px; border-top:1px solid var(--hair); font-size:12.5px; color:var(--muted);}
+
+  /* discovery recreation */
+  .disc{padding:16px 16px; font-family:var(--mono); font-size:11.5px; line-height:1.65; overflow-x:auto;}
+  .disc .h{color:var(--bad);} .disc .k{color:var(--accent);} .disc .v{color:var(--ink);} .disc .c{color:var(--faint);} .disc .g{color:var(--ok);}
+  .disc pre{margin:0; white-space:pre;}
+
+  /* audit stream */
+  .stream{padding:6px 0; font-family:var(--mono); font-size:11px; line-height:1.5; overflow-x:auto;}
+  .stream .ln{padding:6px 14px; border-bottom:1px solid var(--hair); white-space:nowrap;}
+  .stream .ln:last-child{border-bottom:0;}
+  .stream .tag2{background:color-mix(in srgb,var(--learn) 22%,transparent); color:var(--learn); border-radius:3px; padding:0 4px;}
+  .stream .iss{color:var(--ok);} .stream .den{color:var(--bad);} .stream .dim{color:var(--faint);} .stream .id{color:var(--accent);}
+
+  /* verify list */
+  .checks{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+  .checks li{display:grid; grid-template-columns:20px 1fr; gap:12px; font-size:15px; color:var(--muted);}
+  .checks .ck{color:var(--ok); font-weight:700;}
+  .checks b{color:var(--ink); font-weight:600;}
+
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 18px; color:var(--muted); font-size:15px;}
+  .callout b{color:var(--ink);}
+
+  footer{border-top:1px solid var(--hair); padding:34px 0 60px; color:var(--faint); font-size:13px;}
+  .nextlink{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--hair); margin-bottom:22px; flex-wrap:wrap;}
+  .nextlink .lab{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+  .nextlink a{font-size:19px; font-weight:600;}
+  .paths{font-family:var(--mono); font-size:12px; color:var(--faint); line-height:1.8;}
+  .term{background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;}
+  .term .bar{padding:9px 14px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .term pre{margin:0; padding:15px 17px; font-family:var(--mono); font-size:12.5px; line-height:1.8; color:var(--ink); overflow-x:auto; white-space:pre;}
+  .term .p{color:var(--accent);} .term .c{color:var(--faint);} .term .o{color:var(--muted);}
+
+  /* sequence-diagram component (the flow-diagram norm) */
+  .seq{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px 14px 12px;overflow-x:auto;margin-bottom:22px;}
+  .seq svg{display:block;margin:0 auto;}
+  .seqcap{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:center;margin-top:12px;letter-spacing:.02em;}
+  .seqla{stroke:var(--accent);stroke-width:1.6;fill:none;}
+  .seqlm{stroke:var(--muted);stroke-width:1.4;fill:none;stroke-dasharray:5 4;}
+  .seqta{fill:var(--accent);stroke:none;} .seqtm{fill:var(--muted);stroke:none;}
+  .seqlife{stroke:var(--hair);stroke-width:1;fill:none;stroke-dasharray:3 5;}
+  .seqhdr{fill:var(--panel2);stroke:var(--border);}
+  .seqact{fill:var(--ink);font-family:var(--sans);font-size:12px;font-weight:600;}
+  .seqsub{fill:var(--faint);font-family:var(--mono);font-size:9.5px;}
+  .seqtxt{fill:var(--muted);font-family:var(--sans);font-size:12px;}
+  .seqtxt.r{fill:var(--faint);}
+  .seqnote{fill:var(--faint);font-family:var(--mono);font-size:10px;}
+  .seqnumc{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1;}
+  .seqnum{fill:var(--accent);font-family:var(--mono);font-size:10px;font-weight:600;}
+</style>
+
+<div class="rail"><div class="wrap">
+  <a class="mark" href="index.html" style="text-decoration:none">PROKURA</a>
+  <div class="steps"><a class="done" href="index.html" style="text-decoration:none">M0</a><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><a class="done" href="m3-human-approval.html" style="text-decoration:none">M3</a><i>·</i><a class="done" href="m4-mcp-authorization.html" style="text-decoration:none">M4</a><i>·</i><span class="cur">M5</span></div>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Milestone 05 · Build log</p>
+    <h1>Retrieval that stops at the user's permission line</h1>
+    <p class="thesis">M1–M4 proved the <i>action</i> side of agentic identity — delegated exchange, brokered tokens, human approval, all through MCP. M5 proves the <b>data</b> side: an agent retrieves only the documents <b>the querying user is entitled to see</b>, enforced by evaluating OpenFGA <b>as the end user, never as the agent</b>. The proof is adversarial — a protected doc is the <b>top embedding hit</b> and still never leaks.</p>
+    <div class="meta">
+      <span class="chip status">Shipped · 2026-08-07</span>
+      <span class="chip">rag-authorization</span>
+      <span class="chip">OpenFGA batch_check</span>
+      <span class="chip">pgvector · RFC 8693</span>
+    </div>
+  </header>
+  <hr>
+  <section>
+    <p class="lead">This is the confused-deputy defense made concrete. A retrieval-augmented agent is a classic deputy: it holds powerful credentials and acts on a user's behalf. If it embeds a query, pulls the nearest documents, and hands them to the model, it will happily surface a file the <i>user</i> was never allowed to open. The fix is not a filter bolted on after — it is to make the <b>authorization decision at retrieval time, as the user</b>.</p>
+    <p class="lead">M5 adds one service: a <b>RAG retriever</b> that validates a token addressed to <i>its own</i> audience (<code>aud=rag-server</code>), derives the end user from it, and authorizes every candidate chunk against OpenFGA as <code>user:{sub}</code>. Agent identity alone gets nothing. It is reachable as the <code>rag_search</code> MCP tool — the same surface as M4 — so the demo trilogy (GitHub issues → gated email → ACL'd RAG) lands on one connection.</p>
+  </section>
+
+  <section>
+    <p class="kicker">By the numbers</p>
+    <div class="nums">
+      <div><div class="n">9</div><div class="l">new RAG smoke tests — authorization, adversarial leakage, the MCP tool</div></div>
+      <div><div class="n">0</div><div class="l">bytes of an unauthorized document reach the answer — even as the #1 hit</div></div>
+      <div><div class="n">0</div><div class="l">new containers — pgvector rides in the existing Postgres</div></div>
+      <div><div class="n">user</div><div class="l">the FGA subject is the end user, never the agent principal</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The shape of it</p>
+    <h2>The retriever authorizes as the end user</h2>
+    <p class="lead">The <b>RAG retriever</b> is a resource server like the broker and tools-API: it accepts only a token minted for <b>its own audience</b>. The <code>rag_search</code> MCP tool exchanges the inbound token (RFC 8693) for <code>aud=rag-server</code> — never forwarding it — and the retriever runs an OpenFGA <code>batch_check</code> for <code>document:{id} viewer user:{sub}</code> across the candidate set. Only authorized chunks survive.</p>
+    <div class="diagram">
+      <div class="flowrow">
+        <div class="node"><div class="t">MCP client</div><div class="s">rag_search(query)</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">MCP server</div><div class="s">RFC 8693 → rag-server</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">RAG retriever</div><div class="s">aud=rag-server</div></div>
+      </div>
+      <div class="flowrow" style="margin-top:12px;">
+        <div class="node trust"><div class="t">pgvector</div><div class="s">top-K candidates</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">RAG retriever</div><div class="s">filter as user:{sub}</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">OpenFGA</div><div class="s">batch_check · viewer</div></div>
+      </div>
+      <div class="legend"><span class="tcb">Trusted computing base</span><span class="ext">Untrusted client</span></div>
+      <div class="caption">Retrieve first, then authorize the candidates as the end user. An unauthorized doc is dropped after ranking — never before, never after the answer.</div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">How it works</p>
+    <h2>From a query to only-what-you-may-see</h2>
+    <div class="seq" id="flow"></div>
+    <div class="ledger">
+      <div class="entry"><div class="idx">01</div><div>
+        <h3>Exchange for the retriever's audience — no passthrough</h3>
+        <p>On <code>tools/call rag_search</code>, the MCP server <b>exchanges</b> the inbound token (RFC 8693, as the confidential <code>mcp-server</code> client) for <code>aud=rag-server</code>. The exchange preserves the end user's <code>sub</code> while <code>azp</code> becomes <code>mcp-server</code>. The inbound MCP token is <b>never forwarded</b> — presenting it to the retriever directly is refused.</p>
+      </div></div>
+      <div class="entry"><div class="idx">02</div><div>
+        <h3>Embed, then pull the nearest candidates</h3>
+        <p>The retriever validates <code>aud=rag-server</code> (the F2 defense), embeds the query with a <b>local, offline, deterministic</b> vectorizer, and asks pgvector for the top-K nearest chunks. This is the <i>candidate</i> set — ranking only, no authorization yet. The protected doc, if it matches, is right here at the top.</p>
+      </div></div>
+      <div class="entry"><div class="idx">03</div><div>
+        <h3>Authorize the candidates as the end user</h3>
+        <p>One OpenFGA <code>batch_check</code> asks, for each candidate, <b>is <code>user:{sub}</code> a <code>viewer</code>?</b> — the querying human, not the agent. Only chunks whose document the user may view survive into the answer. A retrieval with no end user, or a foreign-audience token, returns <b>no chunks at all</b>.</p>
+      </div></div>
+      <div class="entry"><div class="idx">04</div><div>
+        <h3>The top hit is filtered, not the tail</h3>
+        <p>The corpus is seeded so a protected file (<code>secret-roadmap</code>, shared with alice only) is the <b>#1 embedding hit</b> for a crafted acquisition-timeline query. For bob it is the top candidate too — and it is dropped after ranking. <code>allowed &lt; candidates</code>: the authorization decision, not the ranking, is what he sees.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Decisions &amp; what we learned</p>
+    <h2>Where the standard met the implementation</h2>
+    <div class="reg">
+      <div class="row"><span class="tag dec">Decision</span><h3>Authorize as <code>user:{sub}</code>, never as the agent</h3><p>The whole point. The retriever derives the subject only from a token whose <code>aud</code> it validates as <code>rag-server</code> — never a caller-supplied id — and runs <code>batch_check</code> as that user. "Agent identity is insufficient" is a service-level test, not a convention: the agent's own <code>aud=mcp-server</code> token gets zero chunks.</p></div>
+      <div class="row"><span class="tag learn">Learned</span><h3>pgvector isn't in <code>postgres:17-alpine</code></h3><p>The spike found <code>CREATE EXTENSION vector</code> fails on the stock image. The fix was a one-line image swap to <code>pgvector/pgvector:pg17</code> (Postgres 17 + pgvector 0.8.6) — the vector store rides in the <b>existing</b> Postgres, adding no container. Verified with a real cosine top-K before a line of service code.</p></div>
+      <div class="row"><span class="tag learn">Learned</span><h3>The FGA subject is the username, not the raw <code>sub</code></h3><p>The token <code>sub</code> is an opaque UUID; <code>preferred_username</code> is the stable id the broker and the whole OpenFGA model already key on (<code>user:alice</code>). So the retriever authorizes as <code>user:{preferred_username}</code> — the concrete, cross-service-consistent reading of the spec's <code>user:{sub}</code>.</p></div>
+      <div class="row"><span class="tag dec">Decision</span><h3>Offline embedder; Drive-shaped manifest; live Drive parked</h3><p>Embeddings come from a deterministic, no-secret vectorizer so the demo runs offline and the adversarial case reproduces byte-for-byte — the property under test is authorization, which a lexical embedder proves as well as a semantic one. Tuples are seeded from a <b>Drive-shaped manifest</b>; live Drive ingestion is parked to v1, and it changes only the tuple <i>source</i> — the filter is identical.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Seeing it work</p>
+    <h2>The adversarial ranking and the retrieval audit</h2>
+    <p class="lead">On the left, the crafted query and its real ranking: the protected <code>secret-roadmap</code> is the <b>#1 hit</b>. On the right, the retriever's realtime audit — each decision carrying the querying user, the candidate and allowed counts, and a correlation id that joins to the flow trace. It never logs document content. Both are recreated from the real running system.</p>
+    <div class="show">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">:8150/rag/search · candidate ranking</span></div>
+        <div class="disc"><pre><span class="c"># query: "When does the Meridian</span>
+<span class="c">#         acquisition close?"</span>
+
+  <span class="k">#1</span> <span class="h">secret-roadmap</span>   cos <span class="v">0.68</span>  <span class="c">viewer: alice</span>
+  <span class="k">#2</span> public-handbook  cos <span class="v">0.09</span>  <span class="c">viewer: *</span>
+  <span class="k">#3</span> bob-notes        cos <span class="v">0.09</span>  <span class="c">owner: bob</span>
+  <span class="k">#4</span> shared-budget    cos <span class="v">0.00</span>  <span class="c">alice,bob</span>
+
+<span class="c"># alice → batch_check → </span><span class="g">gets #1</span>
+<span class="c"># bob   → batch_check → </span><span class="h">#1 filtered</span></pre></div>
+        <div class="cap">The protected doc is the top hit for both users. Only alice, a <code>viewer</code>, retrieves it.</div>
+      </div>
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">Grafana · RAG retrieval audit</span></div>
+        <div class="stream">
+          <div class="ln"><span class="dim">13:08</span> <span class="tag2">rag_audit</span> <span class="id">id=d72a…1797</span> <span class="iss">retrieved</span> user=alice candidates=4 allowed=3</div>
+          <div class="ln"><span class="dim">13:08</span> <span class="tag2">rag_audit</span> <span class="id">id=4d54…ec894</span> <span class="iss">retrieved</span> user=bob candidates=4 allowed=3</div>
+          <div class="ln"><span class="dim">13:08</span> <span class="tag2">rag_audit</span> <span class="id">id=aaa4…af4f</span> <span class="den">denied_audience</span> aud=[mcp-server] ≠ rag-server</div>
+          <div class="ln"><span class="dim">13:07</span> <span class="tag2">rag_audit</span> <span class="id">id=e2e1…d33c</span> <span class="iss">retrieved</span> user=alice candidates=4 allowed=3</div>
+          <div class="ln"><span class="dim">13:07</span> <span class="tag2">rag_audit</span> <span class="id">id=c702…ce1d9</span> <span class="iss">retrieved</span> user=bob candidates=4 allowed=3</div>
+        </div>
+        <div class="cap">Same <code>candidates=4</code> for both; alice and bob each get 3 — but not the <i>same</i> 3. The <code>id</code> spans mcp → rag → openfga in Tempo.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Run it yourself</p>
+    <h2>Prove the leak that never happens</h2>
+    <p class="lead">The tests drive the live stack as a real MCP client: they log in as alice and bob, call <code>rag_search</code> with the adversarial query, and assert alice retrieves the protected doc while bob provably cannot — even as his top hit — and that the inbound MCP token is never forwarded downstream.</p>
+    <div class="term">
+      <div class="bar">your shell · repo root · stack up, venv active (see M0 / M1)</div>
+<pre><span class="p">$</span> docker compose up -d   <span class="c"># rag seeds its corpus + FGA tuples at startup</span>
+
+<span class="c"># authorized retrieves; unauthorized doesn't — even as the #1 hit;</span>
+<span class="c"># foreign-audience / no-identity calls return no chunks</span>
+<span class="p">$</span> pytest tests/smoke/test_rag_authorization.py -v
+
+<span class="c"># rag_search through MCP: end-user sub preserved, only that user's</span>
+<span class="c"># chunks returned, inbound MCP token not forwarded downstream</span>
+<span class="p">$</span> pytest tests/smoke/test_rag_mcp.py -v
+
+<span class="c"># the RAG row on the delegation dashboard</span>
+<span class="p">$</span> open http://localhost:3001/d/prokura-delegation</pre>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Verified by looking</p>
+    <h2>What we confirmed</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>An <b>authorized user retrieves a protected document</b> through <code>rag_search</code>; an <b>unauthorized user does not</b> — even though it is the <b>top embedding hit</b> (<code>allowed &lt; candidates</code>).</span></li>
+      <li><span class="ck">✓</span><span>The retriever authorizes as <b><code>user:{sub}</code></b> from a validated <code>aud=rag-server</code> token; a <b>foreign-audience or identity-less call returns no chunks</b>.</span></li>
+      <li><span class="ck">✓</span><span>The <b>inbound MCP token is refused downstream</b> — <code>rag_search</code> exchanges for <code>rag-server</code> and never forwards it.</span></li>
+      <li><span class="ck">✓</span><span>Ingestion writes a document's <b>FGA tuples before</b> its chunks are queryable; a document with no tuples is visible to no one.</span></li>
+      <li><span class="ck">✓</span><span>The flow is <b>one linked trace</b> (mcp → rag → openfga) with the same correlation id in <b>live <code>rag_audit</code></b> and on the dashboard's RAG row; a clean-slate <code>down -v &amp;&amp; up</code> reproduces it.</span></li>
+    </ul>
+    <p style="margin-top:22px"></p>
+    <div class="callout"><b>Where this leaves Prokura.</b> The delegation story is complete end to end: an agent connects over MCP, exchanges for exactly the audience each hop needs, gets consent-gated tokens and human-approved actions, and now retrieves only the data the user may see — every hop observable as one trace. Live Google Drive ingestion is the named next step; the enforcement path it plugs into is already built and tested.</div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Previous milestone</div><a href="m4-mcp-authorization.html">← M4 · MCP Authorization</a></div>
+      <div style="text-align:right"><div class="lab">Status</div><span style="color:var(--ok)">Shipped &amp; archived</span></div>
+    </div>
+    <div class="paths">
+      services/rag/ &nbsp;·&nbsp; resource server (aud=rag-server) · offline embedder · pgvector store · FGA-as-user batch_check<br>
+      deploy/rag/ &nbsp;·&nbsp; Drive-shaped corpus + manifest.json (owner / viewers, * = public)<br>
+      deploy/keycloak/realm-export.json &nbsp;·&nbsp; rag-server client · rag-audience scope · mcp-server exchange permission<br>
+      services/mcp/tools.py &nbsp;·&nbsp; rag_search tool (exchange → rag-server, no passthrough)<br>
+      tests/smoke/test_rag_authorization.py · test_rag_mcp.py &nbsp;·&nbsp; adversarial leakage + MCP path<br>
+      openspec/changes/archive/2026-08-07-add-rag-authorization/ &nbsp;·&nbsp; proposal · design · specs · tasks
+    </div>
+  </footer>
+</div>
+<script>
+function renderSeq(el, actors, steps, caption){
+  const NS="http://www.w3.org/2000/svg";
+  const N=actors.length, padX=78, numCol=30;
+  const W=Math.max(680, 120+(N-1)*Math.max(120,560/(N-1||1)));
+  const colW=(W-numCol-padX)/(N-1||1);
+  const X=i=>numCol+padX/2+i*colW;
+  const top=6, hdrH=30, lifeTop=top+hdrH+8, startY=lifeTop+30, rowH=46;
+  const H=startY+steps.length*rowH+6;
+  const idx=id=>actors.findIndex(a=>a.id===id);
+  const mk=(t,a,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e;};
+  const svg=mk("svg",{viewBox:"0 0 "+W+" "+H,width:W,style:"max-width:100%;height:auto"});
+  actors.forEach((a,i)=>{const cx=X(i);
+    svg.append(mk("rect",{x:cx-52,y:top,width:104,height:hdrH,rx:8,class:"seqhdr"}));
+    svg.append(mk("text",{x:cx,y:top+(a.sub?12:19),"text-anchor":"middle",class:"seqact"},a.label));
+    if(a.sub) svg.append(mk("text",{x:cx,y:top+24,"text-anchor":"middle",class:"seqsub"},a.sub));
+    svg.append(mk("line",{x1:cx,y1:lifeTop,x2:cx,y2:H-6,class:"seqlife"}));});
+  steps.forEach((s,i)=>{const y=startY+i*rowH, x1=X(idx(s.from)), x2=X(idx(s.to));
+    const line=s.ret?"seqlm":"seqla", head=s.ret?"seqtm":"seqta";
+    svg.append(mk("circle",{cx:15,cy:y,r:9,class:"seqnumc"}));
+    svg.append(mk("text",{x:15,y:y+3.5,"text-anchor":"middle",class:"seqnum"},i+1));
+    if(s.from===s.to){const w=46, left=idx(s.from)>=N-1, dx=left?-1:1;
+      svg.append(mk("path",{d:"M "+x1+" "+(y-8)+" h "+(dx*w)+" v 16 h "+(-dx*w),class:line}));
+      svg.append(mk("path",{d:"M "+(x1+dx*7)+" "+(y+3)+" l "+(-dx*7)+" 5 l "+(dx*7)+" 5 z",class:head}));
+      svg.append(mk("text",{x:x1+dx*(w+8),y:y+4,"text-anchor":left?"end":"start",class:"seqtxt"+(s.ret?" r":"")},s.t));
+    } else {const dir=x2>x1?1:-1, ex=x2-dir*7;
+      svg.append(mk("line",{x1:x1,y1:y,x2:ex,y2:y,class:line}));
+      svg.append(mk("path",{d:"M "+x2+" "+y+" l "+(-dir*8)+" -5 v 10 z",class:head}));
+      svg.append(mk("text",{x:(x1+x2)/2,y:y-7,"text-anchor":"middle",class:"seqtxt"+(s.ret?" r":"")},s.t));
+      if(s.n) svg.append(mk("text",{x:(x1+x2)/2,y:y+12,"text-anchor":"middle",class:"seqnote"},s.n));}});
+  el.append(svg);
+  if(caption){const c=document.createElement("div");c.className="seqcap";c.textContent=caption;el.append(c);}
+}
+renderSeq(document.getElementById("flow"),
+  [{id:"client",label:"MCP client"},{id:"mcp",label:"MCP server",sub:"resource"},{id:"kc",label:"Keycloak",sub:"exchange"},{id:"rag",label:"RAG",sub:"aud=rag-server"},{id:"fga",label:"OpenFGA"}],
+  [
+    {from:"client",to:"mcp",t:"tools/call rag_search(query)"},
+    {from:"mcp",to:"kc",t:"RFC 8693 exchange → rag-server",n:"sub preserved · azp=mcp-server"},
+    {from:"kc",to:"mcp",t:"token · aud=rag-server",ret:true},
+    {from:"mcp",to:"rag",t:"POST /rag/search · Bearer rag-server"},
+    {from:"rag",to:"rag",t:"embed → pgvector top-K",n:"candidates (ranking only)"},
+    {from:"rag",to:"fga",t:"batch_check viewer user:{sub}"},
+    {from:"fga",to:"rag",t:"allowed[] — top hit filtered for non-viewer",ret:true},
+    {from:"rag",to:"mcp",t:"authorized chunks + answer",ret:true},
+    {from:"mcp",to:"client",t:"only what the user may see",ret:true}
+   ],
+  'Exchange for the retriever’s audience, embed, rank, then authorize the candidates as the end user. The inbound token is never forwarded; the top hit is filtered, not the tail.');
+</script>

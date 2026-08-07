@@ -553,8 +553,8 @@
   {
    "id": 13,
    "type": "logs",
-   "title": "MCP — live tool audit",
-   "description": "Every MCP tool decision (exchange / broker / approval_required / sent), each with a correlation id joining to the flow trace. The inbound MCP token is never forwarded downstream — each tool exchanges it first.",
+   "title": "MCP \u2014 live tool audit",
+   "description": "Every MCP tool decision (exchange / broker / approval_required / sent), each with a correlation id joining to the flow trace. The inbound MCP token is never forwarded downstream \u2014 each tool exchanges it first.",
    "datasource": {
     "type": "loki",
     "uid": "loki"
@@ -580,6 +580,86 @@
       "uid": "loki"
      },
      "expr": "{service_name=\"mcp\"} |= \"mcp_audit\""
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "type": "stat",
+   "title": "RAG retrievals (1h)",
+   "description": "Authorization-filtered retrievals through the RAG service (M5, Flow D). Source: rag_audit in Loki. Each retrieval authorizes candidate chunks as the END USER against OpenFGA \u2014 an unauthorized doc is never returned, even as the top hit.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 58
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "purple"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "graphMode": "area",
+    "colorMode": "value",
+    "textMode": "value"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"rag\"} |= \"rag_audit\" |~ \"decision=retrieved\" [1h]))"
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "type": "logs",
+   "title": "RAG \u2014 live retrieval audit",
+   "description": "Every retrieval decision (querying user, candidate count, allowed count) with a correlation id joining to the flow trace mcp \u2192 rag \u2192 openfga. Never logs document content \u2014 non-leakage holds for the audit trail too.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "h": 11,
+    "w": 18,
+    "x": 6,
+    "y": 58
+   },
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending",
+    "enableLogDetails": true,
+    "dedupStrategy": "none"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "{service_name=\"rag\"} |= \"rag_audit\""
     }
    ]
   }

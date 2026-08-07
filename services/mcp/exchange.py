@@ -25,6 +25,7 @@ _ACCESS = "urn:ietf:params:oauth:token-type:access_token"
 _AUDIENCE_SCOPE = {
     config.BROKER_AUDIENCE: "broker-audience",
     config.TOOLS_AUDIENCE: "tools-audience",
+    config.RAG_AUDIENCE: "rag-audience",
 }
 
 

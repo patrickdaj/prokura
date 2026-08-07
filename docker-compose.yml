@@ -4,7 +4,10 @@ name: prokura
 
 services:
   postgres:
-    image: postgres:17-alpine
+    # pgvector-enabled Postgres (M5): the stock postgres:17-alpine does NOT bundle
+    # the `vector` extension (proven by the M5 spike). pgvector/pgvector:pg17 is
+    # Postgres 17 + pgvector 0.8.6; the RAG store lives here (no new container).
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-prokura}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prokura-dev}
@@ -263,10 +266,43 @@ services:
       BROKER_AUDIENCE: token-broker
       TOOLS_URL: http://tools-api:8130
       TOOLS_AUDIENCE: agent-tools-api
+      RAG_URL: http://rag:8150
+      RAG_AUDIENCE: rag-server
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
       OTEL_SERVICE_NAME: mcp
     depends_on:
       keycloak:
+        condition: service_started
+
+  # M5: RAG retriever — Flow D authorization-filtered retrieval. Validates
+  # aud=rag-server (F2), embeds the query offline, pulls top-K from pgvector, then
+  # authorizes candidates against OpenFGA AS THE END USER (never the agent). Seeds
+  # the Drive-shaped corpus (tuples before queryability) at startup. Fire-and-forget
+  # telemetry (no depends_on: lgtm).
+  rag:
+    build: ./services/rag
+    ports:
+      - "8150:8150"
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/prokura
+      PROKURA_REALM: prokura
+      RAG_AUDIENCE: rag-server
+      OPENFGA_URL: http://openfga:8080
+      FGA_STORE_NAME: prokura
+      DATABASE_URL: postgresql://${POSTGRES_USER:-prokura}:${POSTGRES_PASSWORD:-prokura-dev}@postgres:5432/${POSTGRES_DB:-prokura}
+      RAG_CORPUS_DIR: /deploy/rag/corpus
+      RAG_MANIFEST_PATH: /deploy/rag/manifest.json
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
+      OTEL_SERVICE_NAME: rag
+    volumes:
+      - ./deploy/rag:/deploy/rag:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      openfga:
         condition: service_started
 
   # M0 spike (F6-A): receives Keycloak's CIBA delegation POSTs and returns

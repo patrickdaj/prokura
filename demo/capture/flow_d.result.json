@@ -1,0 +1,72 @@
+{
+  "query": "When does the Meridian acquisition close? acquisition timeline roadmap",
+  "alice": {
+    "user": "alice",
+    "candidates": 4,
+    "allowed": 3,
+    "answer": "The Meridian acquisition closes in Q3. Timeline milestones for the acquisition of\nMeridian and the post-close integration roadmap are tracked here. The acquisition\nprice, the acquisition timeline, and the roadmap for merging Meridian's platform\nare strictly need-to-know. Do not forward. Acquisition close target: Q3. Confidential acquisition roadmap \u2014 INTERNAL, alice only. Office hours are 9 to 5. The vacation policy grants 25 days per year. The expense\nreimbursement process runs monthly; submit receipts through the portal. This\nhandbook is shared with everyone in the company. Headcount planning and cost centers for the next quarter. Departmental budget\nallocations, hiring plan, and the travel and tooling line items.",
+    "leaks_meridian": true,
+    "chunks": [
+      {
+        "doc_id": "secret-roadmap",
+        "score": null,
+        "allowed": null
+      },
+      {
+        "doc_id": "secret-roadmap",
+        "score": null,
+        "allowed": null
+      },
+      {
+        "doc_id": "public-handbook",
+        "score": null,
+        "allowed": null
+      },
+      {
+        "doc_id": "shared-budget",
+        "score": null,
+        "allowed": null
+      }
+    ],
+    "raw_keys": [
+      "allowed",
+      "answer",
+      "candidates",
+      "chunks",
+      "query",
+      "user"
+    ]
+  },
+  "bob": {
+    "user": "bob",
+    "candidates": 4,
+    "allowed": 3,
+    "answer": "Notes from the weekly engineering sync and sprint planning. Action items for the\nbackend team, the flaky test triage, and the on-call rotation for next month. Office hours are 9 to 5. The vacation policy grants 25 days per year. The expense\nreimbursement process runs monthly; submit receipts through the portal. This\nhandbook is shared with everyone in the company. Headcount planning and cost centers for the next quarter. Departmental budget\nallocations, hiring plan, and the travel and tooling line items.",
+    "leaks_meridian": false,
+    "chunks": [
+      {
+        "doc_id": "bob-notes",
+        "score": null,
+        "allowed": null
+      },
+      {
+        "doc_id": "public-handbook",
+        "score": null,
+        "allowed": null
+      },
+      {
+        "doc_id": "shared-budget",
+        "score": null,
+        "allowed": null
+      }
+    ],
+    "raw_keys": [
+      "allowed",
+      "answer",
+      "candidates",
+      "chunks",
+      "query",
+      "user"
+    ]
+  }
+}

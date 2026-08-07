@@ -7,7 +7,7 @@
   "ssoSessionIdleTimeout": 1800,
   "registrationAllowed": false,
   "defaultDefaultClientScopes": ["basic", "profile", "mcp-audience"],
-  "defaultOptionalClientScopes": ["tools:read", "tools:execute", "broker-audience", "tools-audience"],
+  "defaultOptionalClientScopes": ["tools:read", "tools:execute", "broker-audience", "tools-audience", "rag-audience"],
   "eventsEnabled": true,
   "eventsExpiration": 604800,
   "adminEventsEnabled": true,
@@ -37,6 +37,22 @@
       "clientRoles": {
         "broker": ["read-token"]
       }
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@prokura.local",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Demo",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["default-roles-prokura"]
     }
   ],
   "clientScopes": [
@@ -134,6 +150,23 @@
           "protocolMapper": "oidc-audience-mapper",
           "config": {
             "included.client.audience": "mcp-server",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rag-audience",
+      "description": "M5: binds aud=rag-server. mcp-server carries this optional scope so rag_search can exchange an inbound MCP token into a rag-server-audience token; the RAG service validates it (F2 defense) and authorizes as user:{sub}.",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true" },
+      "protocolMappers": [
+        {
+          "name": "rag-server-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "rag-server",
             "access.token.claim": "true"
           }
         }
@@ -365,7 +398,7 @@
     {
       "clientId": "mcp-server",
       "name": "MCP server (M4: audience/resource + exchange subject)",
-      "description": "mcp-audience points here (aud target). Confidential + token-exchange enabled: the MCP server exchanges an inbound MCP token into a broker-/tools-audience token (azp=mcp-server), never forwarding the inbound token.",
+      "description": "mcp-audience points here (aud target). Confidential + token-exchange enabled: the MCP server exchanges an inbound MCP token into a broker-/tools-/rag-audience token (azp=mcp-server), never forwarding the inbound token.",
       "publicClient": false,
       "enabled": true,
       "protocol": "openid-connect",
@@ -375,7 +408,21 @@
       "clientAuthenticatorType": "client-secret",
       "secret": "mcp-server-dev-secret",
       "defaultClientScopes": ["basic", "profile"],
-      "optionalClientScopes": ["broker-audience", "tools-audience"],
+      "optionalClientScopes": ["broker-audience", "tools-audience", "rag-audience"],
+      "attributes": { "standard.token.exchange.enabled": "true" }
+    },
+    {
+      "clientId": "rag-server",
+      "name": "RAG retriever (M5: audience / resource)",
+      "description": "aud target for rag-audience: the RAG retriever validates aud=rag-server on inbound tokens (F2 defense) and authorizes as user:{sub}. mcp-server exchanges an inbound MCP token for this audience so rag_search never forwards the inbound token.",
+      "publicClient": false,
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "rag-server-dev-secret",
       "attributes": { "standard.token.exchange.enabled": "true" }
     }
   ]

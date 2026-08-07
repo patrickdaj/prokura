@@ -34,6 +34,8 @@ BROKER_URL = os.environ.get("BROKER_URL", "http://token-broker:8110")
 BROKER_AUDIENCE = os.environ.get("BROKER_AUDIENCE", "token-broker")
 TOOLS_URL = os.environ.get("TOOLS_URL", "http://tools-api:8130")
 TOOLS_AUDIENCE = os.environ.get("TOOLS_AUDIENCE", "agent-tools-api")
+RAG_URL = os.environ.get("RAG_URL", "http://rag:8150")
+RAG_AUDIENCE = os.environ.get("RAG_AUDIENCE", "rag-server")
 
 OTLP_ENDPOINT = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://lgtm:4317")
 SERVICE_NAME = os.environ.get("OTEL_SERVICE_NAME", "mcp")

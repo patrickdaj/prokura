@@ -1,0 +1,206 @@
+<meta charset="utf-8">
+<title>Prokura — M6: What the Threat Model Found</title>
+<style>
+  :root{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+      --ink:#10151c; --muted:#566372; --faint:#8794a2;
+      --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+  }
+  :root[data-theme="light"]{
+    --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+    --ink:#10151c; --muted:#566372; --faint:#8794a2;
+    --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16.5px; line-height:1.62;
+    background-image:radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--bad) 8%, transparent) 0%, transparent 62%);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+
+  .rail{border-bottom:1px solid var(--hair); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter:blur(8px);}
+  .rail .wrap{display:flex; align-items:center; justify-content:space-between; height:56px;}
+  .mark{font-family:var(--sans); font-weight:600; letter-spacing:.42em; font-size:13px; color:var(--ink);}
+  .steps{display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;}
+  .steps span{color:var(--faint);}
+  .steps .cur{color:var(--accent);}
+  .steps .done{color:var(--muted);}
+  .steps i{color:var(--faint); font-style:normal;}
+
+  .hero{padding:70px 0 34px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 18px;}
+  h1{font-size:clamp(34px,6vw,52px); line-height:1.04; letter-spacing:-.02em; font-weight:640; margin:0 0 20px; text-wrap:balance;}
+  .thesis{font-size:20px; line-height:1.5; color:var(--muted); margin:0; max-width:64ch; text-wrap:pretty;}
+  .thesis b{color:var(--ink); font-weight:600;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px; font-family:var(--mono); font-size:12px;}
+  .chip{border:1px solid var(--border); border-radius:999px; padding:4px 11px; color:var(--muted); letter-spacing:.03em;}
+  .chip.status{border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); color:var(--ok);}
+  .chip.status::before{content:"●"; margin-right:6px; font-size:9px; vertical-align:1px;}
+
+  section{padding:34px 0;}
+  .kicker{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 6px;}
+  h2{font-size:26px; letter-spacing:-.01em; font-weight:620; margin:0 0 16px; text-wrap:balance;}
+  h3{font-size:16px; margin:0 0 6px; font-weight:620;}
+  p{margin:0 0 15px;}
+  .lead{color:var(--muted);}
+  hr{border:0; border-top:1px solid var(--hair); margin:0;}
+
+  .nums{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .nums div{background:var(--panel); padding:18px 16px;}
+  .nums .n{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .nums .l{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;}
+  @media(max-width:620px){ .nums{grid-template-columns:repeat(2,1fr);} }
+
+  /* attack cards */
+  .atk{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .atk .row{background:var(--panel); padding:20px 20px;}
+  .atk .tgt{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--bad); margin-bottom:8px; display:inline-block;}
+  .atk h3{font-size:16px; margin-bottom:8px;}
+  .atk .path{font-size:14.5px; color:var(--muted); margin:0 0 10px;}
+  .atk .brk{font-size:14.5px; color:var(--ink); margin:0; padding:10px 12px; background:var(--panel2); border-left:3px solid var(--ok); border-radius:8px;}
+  .atk .brk b{color:var(--ok);}
+  .atk code, code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2); border:1px solid var(--hair); border-radius:5px; padding:1px 5px; color:var(--ink);}
+
+  .reg{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .reg .row{background:var(--panel); padding:16px 20px;}
+  .reg .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:6px; display:inline-block;}
+  .tag.low{color:var(--learn);} .tag.res{color:var(--faint);}
+  .reg h3{font-size:15px; margin-bottom:4px;} .reg p{margin:0; font-size:14px; color:var(--muted);}
+
+  .checks{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+  .checks li{display:grid; grid-template-columns:20px 1fr; gap:12px; font-size:15px; color:var(--muted);}
+  .checks .ck{color:var(--ok); font-weight:700;}
+  .checks b{color:var(--ink); font-weight:600;}
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 18px; color:var(--muted); font-size:15px;}
+  .callout b{color:var(--ink);}
+
+  footer{border-top:1px solid var(--hair); padding:34px 0 60px; color:var(--faint); font-size:13px;}
+  .nextlink{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--hair); margin-bottom:22px; flex-wrap:wrap;}
+  .nextlink .lab{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+  .nextlink a{font-size:19px; font-weight:600;}
+  .paths{font-family:var(--mono); font-size:12px; color:var(--faint); line-height:1.8;}
+</style>
+
+<div class="rail"><div class="wrap">
+  <a class="mark" href="index.html" style="text-decoration:none">PROKURA</a>
+  <div class="steps"><a class="done" href="index.html" style="text-decoration:none">M0</a><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><a class="done" href="m3-human-approval.html" style="text-decoration:none">M3</a><i>·</i><a class="done" href="m4-mcp-authorization.html" style="text-decoration:none">M4</a><i>·</i><a class="done" href="m5-rag-authorization.html" style="text-decoration:none">M5</a><i>·</i><span class="cur">M6</span></div>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Milestone 06 · Threat model</p>
+    <h1>The four ways in — and why each one closes</h1>
+    <p class="thesis">With the architecture frozen, we modeled it adversarially: assets, an explicit attacker model, trust boundaries, <b>STRIDE for every flow</b>, and an <b>attack tree</b> for each highest-value target. This is the findings story — the four scariest paths an attacker would take, and the specific control that breaks each. The headline: <b>no High or Medium findings</b>, three Low ones stated honestly, and the confused-deputy — the whole reason this project exists — provably dead.</p>
+    <div class="meta">
+      <span class="chip status">Modeled · 2026-08-07</span>
+      <span class="chip">threat-model</span>
+      <span class="chip">STRIDE · attack trees</span>
+      <span class="chip">adversary-centric</span>
+    </div>
+  </header>
+  <hr>
+  <section>
+    <p class="lead">A companion review asked <i>“are the hard rules enforced?”</i> and answered yes with evidence (see <a href="../security-review.md">security-review.md</a>). This one asks the opposite question — <i>“what can an attacker actually do?”</i> — and follows each answer to the control that stops it. The full model (assets, five STRIDE grids, disposition mapping, residual register) is <a href="../threat-model.md">threat-model.md</a>; this post walks the four attack trees that matter most.</p>
+    <p class="lead">The attacker model is explicit. Every path below is attributed to a defined adversary: a <b>compromised agent</b> holding a valid user-delegated token, a <b>self-registered MCP client</b>, an <b>on-network attacker</b> (no mTLS between services), a <b>malicious grant-linking user</b>, or a <b>curious insider</b>. None can forge Keycloak's signatures, read OpenBao without the broker's scoped token, or write an authorization tuple except through broker code — and those boundaries are what the trees keep hitting.</p>
+  </section>
+
+  <section>
+    <p class="kicker">By the numbers</p>
+    <div class="nums">
+      <div><div class="n">0</div><div class="l">High or Medium findings across every flow</div></div>
+      <div><div class="n">5</div><div class="l">STRIDE grids — flows A–D plus the MCP surface, no empty cells</div></div>
+      <div><div class="n">4</div><div class="l">attack trees for the highest-value targets, each with a breaking control</div></div>
+      <div><div class="n">3</div><div class="l">Low findings, stated honestly — none an approval or data leak</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The four trees</p>
+    <h2>Where an attacker would push, and what pushes back</h2>
+    <div class="atk">
+      <div class="row">
+        <span class="tgt">Target 1 · Token-broker compromise</span>
+        <h3>Steal every provider credential at once</h3>
+        <p class="path"><b>Path.</b> Code-exec on the broker container → use its in-process OpenBao token → read <code>secret/data/grants/*</code> → every user's refresh credential. The broker is also the sole <code>can_use</code> writer, so the same foothold forges consent. This is the worst case, and we name it as such.</p>
+        <p class="brk"><b>What bounds it.</b> The broker's OpenBao token is scoped to <code>grants/*</code> only — no root, no other path. Refresh credentials never leave OpenBao except transiently in memory during a refresh, and never appear in a response, log, or audit line. The concentration itself is an <b>accepted residual</b> for a single-node reference; production splits it (isolation, per-tenant brokers, HSM-backed store). It is flagged as a <b>trusted-code assumption</b> so the other trees can reason about it. See <a href="m2-token-broker.html">M2</a>.</p>
+      </div>
+      <div class="row">
+        <span class="tgt">Target 2 · Consent tuple forgery</span>
+        <h3>Give my agent access to your grant</h3>
+        <p class="path"><b>Path.</b> Write a <code>can_use</code> tuple for the victim's grant directly in OpenFGA, or drive the broker's consent endpoint as the victim.</p>
+        <p class="brk"><b>What breaks it.</b> Both dead-end. The model uses <code>can_use: [agent]</code> <b>direct assignment</b> — no relation chaining to forge through — and <b>only broker code writes it</b>. The broker enforces <code>operator == owner</code> at write time: the consenting session must own the grant, and a cross-user write is refused and audited. The only residual is Target 1 (broker compromise) — a trusted-code assumption, handed forward, not hidden. See <a href="m2-token-broker.html">M2</a>.</p>
+      </div>
+      <div class="row">
+        <span class="tgt">Target 3 · Approval spoofing / replay</span>
+        <h3>Execute a sensitive action nobody approved</h3>
+        <p class="path"><b>Paths.</b> Forge the decision; spoof the notification; race the CIBA delegation receiver; replay an already-approved action. This tree is where the review's most interesting finding lives — <b>SR-02</b>: the <code>/ciba/delegate</code> receiver doesn't authenticate that the caller is Keycloak.</p>
+        <p class="brk"><b>What breaks it — and the honest edge.</b> Forging a decision fails: <code>/decide</code> needs the real user's authenticated session (<code>sub == owner</code>). Notifications are inert: ntfy is deny-all, per-user unguessable topics, no params in the payload. Replay fails: the action token is <b>atomically single-use</b>, and the tools-API hash-verifies the params against what was approved. And SR-02? A forged <code>/ciba/delegate</code> only lets someone <i>who already knows the 96-bit reference</i> win a once-only <code>pending→delegated</code> step — it <b>cannot approve</b> (the decision still needs the user, and Keycloak validates the delegation token on callback). <b>Net impact: denial-of-service on one approval</b>, not a forged one. Recommended fix for v1: authenticate the channel caller. See <a href="m3-human-approval.html">M3</a>.</p>
+      </div>
+      <div class="row">
+        <span class="tgt">Target 4 · RAG confused-deputy</span>
+        <h3>Make the agent hand over a file you can't see</h3>
+        <p class="path"><b>Path.</b> Craft a query so a protected document is the <b>top embedding hit</b>, let the high-privilege agent retrieve it, and read it out of the answer. This is the canonical deputy attack — the reason the whole project exists.</p>
+        <p class="brk"><b>What breaks it.</b> Authorization is evaluated <b>as the end user</b>, never the agent: after ranking, an OpenFGA <code>batch_check</code> with subject <code>user:{sub}</code> filters every candidate, so the top hit is dropped when the user holds no <code>viewer</code> tuple. Proven adversarially — the protected doc <i>is</i> the #1 candidate and still never reaches a non-viewer's answer (<code>allowed &lt; candidates</code>). See <a href="m5-rag-authorization.html">M5</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Stated honestly</p>
+    <h2>The three findings, and what we accept</h2>
+    <p class="lead">Zero High/Medium doesn't mean zero findings — that would be theater. Three Low ones, and the residuals a non-production reference deliberately accepts:</p>
+    <div class="reg">
+      <div class="row"><span class="tag low">Low · fix (v1)</span><h3>SR-01 — error bodies echo library exception text</h3><p>A malformed bearer token surfaces the underlying JWT/codec error string. Leaks implementation detail, no secret. Sanitize to a generic message.</p></div>
+      <div class="row"><span class="tag low">Low · fix (v1)</span><h3>SR-02 — <code>/ciba/delegate</code> is unauthenticated</h3><p>Bounded to DoS of one approval by someone who already knows its unguessable reference (attack tree 3). Verify the caller is Keycloak.</p></div>
+      <div class="row"><span class="tag res">Low · accepted residual</span><h3>SR-03 — no size cap on the RAG query</h3><p>Bounded by the offline, linear-cost embedder. Add an explicit input bound in v1.</p></div>
+      <div class="row"><span class="tag res">Accepted residual</span><h3>Non-production posture</h3><p>No mTLS, dev-mode secrets, single-node, no rate-limiting, the broker as a concentrated point of trust. Each is listed with its production alternative — not implied to be mitigated.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The method, briefly</p>
+    <h2>Three lenses on one system</h2>
+    <p class="lead">M6 looks at the finished architecture through three non-overlapping lenses so nothing hides in the seams between them:</p>
+    <ul class="checks">
+      <li><span class="ck">◆</span><span><b>Control-centric</b> (<a href="../security-review.md">security-review.md</a>) — are the hard rules enforced? One <code>security-baseline</code> contract, evidence per invariant.</span></li>
+      <li><span class="ck">◆</span><span><b>Adversary-centric</b> (this, <a href="../threat-model.md">threat-model.md</a>) — what can an attacker do? STRIDE per flow, attack trees, every threat mapped to a control or an accepted residual.</span></li>
+      <li><span class="ck">◆</span><span><b>Decision-centric</b> (<a href="../adr/">adr/</a>) — why does each control exist? One ADR per locked decision.</span></li>
+    </ul>
+    <p style="margin-top:22px"></p>
+    <div class="callout"><b>The takeaway.</b> Every high-value path we could draw ends at a control we can point to — a signature check, a scoped token, a sole-writer invariant, an end-user authorization decision — or at a residual we name out loud. The confused-deputy, the attack this whole architecture exists to stop, is dead even when the protected document is the single best match for the query.</div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Previous milestone</div><a href="m5-rag-authorization.html">← M5 · RAG Authorization</a></div>
+      <div style="text-align:right"><div class="lab">Full model</div><a href="../threat-model.md">threat-model.md →</a></div>
+    </div>
+    <div class="paths">
+      docs/threat-model.md &nbsp;·&nbsp; assets · attacker model · trust boundaries · 5 STRIDE grids · 4 attack trees · disposition mapping · residual register<br>
+      docs/security-review.md &nbsp;·&nbsp; control-centric findings register (SR-01/02/03) + coverage matrix<br>
+      openspec/specs/security-baseline/ · openspec/specs/threat-model/ &nbsp;·&nbsp; the checkable contracts
+    </div>
+  </footer>
+</div>

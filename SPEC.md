@@ -1,6 +1,14 @@
 # AgentGate — Open-Source Identity Platform for AI Agents
 
-**Status:** Draft v0.1
+> ⚠️ **SUPERSEDED.** This is the original v0.1 design draft (project since renamed
+> **Prokura**). It is kept for history and as the input to the SPEC-REVIEW findings,
+> but it is **no longer the source of truth** — the built system is documented in
+> [`docs/architecture.md`](./docs/architecture.md), and the working specs live in
+> [`openspec/specs/`](./openspec/specs/). Where this draft and the architecture doc
+> disagree, the architecture doc (as-built) is correct. See the
+> [ADRs](./docs/adr/) for how each original decision here was resolved under review.
+
+**Status:** Draft v0.1 — **superseded by `docs/architecture.md`**
 **License target:** Apache-2.0
 **One-liner:** An open-source reference implementation of agentic identity — user authentication, delegated agent authorization, third-party token brokering, human-in-the-loop approval, and fine-grained RAG authorization — assembled from Keycloak, OpenFGA, and OpenBao. An OSS answer to Auth0 for AI Agents.
 

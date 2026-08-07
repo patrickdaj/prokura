@@ -28,18 +28,46 @@ client (e.g. Claude) at the Prokura MCP server and watch discovery, dynamic
 client registration, login, per-agent consent, and push-approved gated actions
 work end to end.
 
-## Quickstart
+## Quickstart (5 minutes)
+
+**1. Bring up the whole stack.**
 
 ```bash
 cp .env.example .env
-docker compose up -d                      # add --profile spike for the CIBA spike service
+docker compose up -d          # ~1 min; add --profile spike for the CIBA spike service
 python3 -m venv .venv && .venv/bin/pip install -r tests/smoke/requirements.txt
-.venv/bin/python -m pytest tests/smoke -v # waits for stack health itself
+```
+
+**2. Watch the headline demo.** A spec-compliant **MCP client** connects exactly as a
+real client (Claude among them) would — discover → dynamic registration → login →
+tools — and drives the whole chain, narrating each step as it happens:
+
+```bash
+.venv/bin/python demo/run_demo.py
+```
+
+You'll watch, in four acts: the client connect with an `aud=mcp-server` token; obtain a
+**consent-gated** provider token (and the raw MCP token get **refused downstream** — no
+passthrough); a **human approve** a gated email that lands in the **Mailpit** sink
+(`http://localhost:8025`); and a **FGA-filtered RAG** query where alice retrieves a
+protected doc and **bob provably cannot — even though it's his top embedding hit**.
+
+**3. Watch it happen** in the bespoke **Prokura Console** (`http://localhost:8095`):
+click a `POST /mcp` trace, expand a span, and hit **"show correlated audit logs"** to
+jump from the trace to its `mcp → rag → openfga` audit lines in Loki. Or follow the
+[**guided walkthroughs**](docs/walkthroughs/) stage by stage.
+
+**Verify it with the test suite** (the same real handshake, asserted rather than
+narrated; waits for stack health itself):
+
+```bash
+.venv/bin/python -m pytest tests/smoke -v
 ```
 
 Service ports: Keycloak `8180` (admin `admin`/`admin`; port 8080 left free for
-other local stacks), OpenFGA `8081`, OpenBao `8200`, ntfy `8090`,
-Mailpit UI `8025` (SMTP `1025`), Postgres `5432`.
+other local stacks), MCP `8140`, RAG `8150`, broker `8110`, approval `8120`,
+tools-api `8130`, console `8095`, OpenFGA `8081`, OpenBao `8200`, ntfy `8090`,
+Mailpit UI `8025` (SMTP `1025`), Grafana `3001`, Postgres `5432`.
 
 The M0 CIBA spike (Keycloak's built-in HTTP authentication channel — verdict:
 works, no Java SPI needed) lives in `spike/ciba-http-channel/`:
@@ -102,11 +130,21 @@ under **one identity model**, which no OSS project demonstrates end to end.
 | Provider catalog | 2 (GitHub, Google) | 250+ | ~15 pre-integrated |
 | License | Apache-2.0 | Elastic License v2 (check terms) | Commercial |
 
+## Documentation
+
+- [**Architecture**](docs/architecture.md) — the consolidated as-built design (supersedes `SPEC.md`)
+- [**Walkthroughs**](docs/walkthroughs/) — follow-along guided tour (master + per-flow)
+- [**Milestone blog series**](docs/blog/index.html) — the build log, M0 → M6
+- [**Threat model**](docs/threat-model.md) — assets, STRIDE per flow, attack trees
+- [**Security review**](docs/security-review.md) — control audit + findings register
+- [**ADRs**](docs/adr/) — one decision record per material choice (F1–F9, Q1–Q7, …)
+
 ## Repository
 
-- `openspec/` — normative capability specs and change history (OpenSpec)
-- `deploy/` — Keycloak realm, OpenFGA model, OpenBao init, ntfy config
-- `services/` — token broker, approval service (later milestones)
-- `spike/` — M0 spike: Keycloak's built-in CIBA HTTP channel
-- `tests/smoke/` — stack smoke tests
-- `docs/` — architecture, threat model, ADRs
+- `openspec/` — normative capability specs and change history (OpenSpec, the source of truth)
+- `deploy/` — Keycloak realm, OpenFGA model, OpenBao init, ntfy, RAG corpus
+- `services/` — token-broker, approval, tools-api, mcp, rag, console
+- `sdk/prokura-py/` — the agent SDK (`exchange`, `get_provider_token`, `require_approval`)
+- `spike/` — per-milestone de-risking spikes (CIBA channel, idp-link, MCP, RAG)
+- `tests/smoke/` — stack smoke tests that drive the live system
+- `docs/` — architecture, walkthroughs, blogs, threat model, security review, ADRs

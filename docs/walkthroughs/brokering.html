@@ -1,0 +1,94 @@
+<meta charset="utf-8">
+<title>Prokura Walkthrough — Token Brokering (Flow B)</title>
+<link rel="stylesheet" href="walkthrough.css">
+<div class="rail"><div class="wrap">
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav"><a href="index.html">← Walkthrough</a><a href="../blog/m2-token-broker.html">M2 blog</a></div>
+</div></div>
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Flow B · brokering deep-dive</p>
+    <h1>Third-party access, without the agent ever holding a secret</h1>
+    <p class="thesis">The agent needs a token for a third-party provider (<code>acme</code>). It asks the
+      broker — and gets back a <b>short-lived access token only</b>. The long-lived refresh credential
+      lives <b>in OpenBao</b> and never leaves; every hand-out is gated by consent and an authorization
+      check. Screens below are captured from the running stack.</p>
+    <div class="meta"><span class="chip">RFC 8693 exchange</span><span class="chip">OpenBao-sealed</span><span class="chip">per-agent consent</span><span class="chip ok">access token only</span></div>
+  </header>
+  <hr>
+
+  <section><div class="stage"><div class="idx">01</div><div>
+    <h3>The agent calls <code>get_provider_token</code> — and gets a bounded token</h3>
+    <p>Through the MCP tool, the agent asks the broker for an <code>acme</code> token. The broker re-exchanges
+      the agent's identity, checks consent, and returns an access token capped at 900&nbsp;s — with
+      <b>no refresh token</b> in the response.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">tool: get_provider_token(provider="acme")</span></div>
+      <div class="body term"><pre>{ <span class="k">"access_token"</span>: <span class="g">"eyJhbGciOiJSUzI1NiIs…"</span>,
+  <span class="k">"expires_in"</span>: <span class="g">900</span>,           <span class="c">// ≤ 900 s, always</span>
+  <span class="k">"scope"</span>: <span class="g">"openid email profile"</span> }
+<span class="c">// refresh_token: ABSENT — it never leaves OpenBao</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the agent is handed a capability that self-expires; it never sees the durable credential.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">02</div><div>
+    <h3>Where the durable credential actually lives — OpenBao</h3>
+    <p>The provider refresh credential was acquired via Keycloak account-linking and written to OpenBao
+      by the broker (the sole writer). Here it is at <code>secret/grants/alice/acme</code> — the values are
+      masked by the vault; the agent, and this page, only ever see dots.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8200 — OpenBao · secret/grants/alice/acme</span></div>
+      <div class="body"><img src="img/flowB-openbao.png" alt="OpenBao UI showing the stored grant secret/grants/alice/acme with masked credential, kind, scopes"></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the refresh credential is sealed in OpenBao (<code>kind: refresh_token</code>), scoped to the broker's policy — not in the agent, not in a token, not on this page.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">03</div><div>
+    <h3>No passthrough — the inbound token is refused downstream</h3>
+    <p>What if the agent just forwards its <i>inbound</i> MCP token straight to the broker? It bounces —
+      the broker only accepts a token minted for <b>its own</b> audience. Each tool re-exchanges; nothing
+      is forwarded.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">broker · inbound-token passthrough probe</span></div>
+      <div class="body term"><pre><span class="p">$</span> POST :8110/v1/tokens/acme   Authorization: Bearer &lt;aud=mcp-server&gt;
+<span class="b">403</span> <span class="o">{"error":"wrong audience: aud=['mcp-server'] does not include 'token-broker'"}</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> holding the inbound token grants nothing downstream — the confused-deputy defense at the broker boundary.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">04</div><div>
+    <h3>Inside the broker — authorize, read, refresh, rotate</h3>
+    <p>Pulled live from the Tempo API: the broker's slice of one delegated action. Before it returns
+      anything it runs an <code>fga.check</code> (→ OpenFGA), reads the grant from OpenBao, refreshes at
+      the provider, and rotates the stored secret — the whole custody chain, in one trace.</p>
+    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8095 — broker span slice</span></div>
+      <div class="body">
+<div class="wf wide">
+<div class="legend"><span><i class="bar-bao"></i>openbao</span><span><i class="bar-broker"></i>broker</span><span><i class="bar-fga"></i>openfga</span><span><i class="bar-kc"></i>keycloak</span><span><i class="bar-mcp"></i>mcp</span><span style="margin-left:auto">trace 9a8d375e4ff8f269… · 11 key spans · 104 ms end-to-end</span></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>POST /mcp</div><div class="track"><div class="bar bar-mcp" style="left:0.0%;width:100.0%"></div></div><div class="d">104.4</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>tool.get_provider_token</div><div class="track"><div class="bar bar-mcp" style="left:0.4%;width:99.1%"></div></div><div class="d">103.5</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>keycloak.mcp_exchange</div><div class="track"><div class="bar bar-mcp" style="left:0.5%;width:27.6%"></div></div><div class="d">28.8</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:16.3%;width:11.5%"></div></div><div class="d">12.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>POST /v1/tokens</div><div class="track"><div class="bar bar-broker" style="left:32.2%;width:67.1%"></div></div><div class="d">70.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>fga.check</div><div class="track"><div class="bar bar-broker" style="left:36.3%;width:5.6%"></div></div><div class="d">5.9</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-fga">openfga</span>Check (authz)</div><div class="track"><div class="bar bar-fga" style="left:40.2%;width:1.4%"></div></div><div class="d">1.5</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-bao">openbao</span>openbao.read_grant</div><div class="track"><div class="bar bar-bao" style="left:42.0%;width:1.0%"></div></div><div class="d">1.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>provider.refresh</div><div class="track"><div class="bar bar-broker" style="left:43.0%;width:49.8%"></div></div><div class="d">52.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:48.2%;width:44.5%"></div></div><div class="d">46.4</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-bao">openbao</span>openbao.rotate_grant</div><div class="track"><div class="bar bar-bao" style="left:93.0%;width:1.7%"></div></div><div class="d">1.8</div></div>
+</div>
+      </div>
+    </div>
+    <div class="cap"><b>What it proves:</b> authorization and secret custody happen server-side, inside the trace — the agent's request drives them but never touches them.</div>
+  </div></div></section>
+
+  <section>
+    <h2>What this flow guarantees</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>Refresh credentials exist <b>only in OpenBao</b> (broker token scoped to <code>secret/data/grants/*</code>).</span></li>
+      <li><span class="ck">✓</span><span>The agent receives <b>access tokens only</b>, scope-checked against the grant, capped at <b>900 s</b>.</span></li>
+      <li><span class="ck">✓</span><span>Every hand-out passes an <b><code>fga.check</code></b>; the inbound token is never forwarded (no passthrough).</span></li>
+    </ul>
+    <p style="margin-top:18px"></p>
+    <div class="callout">Decisions: acquisition via Keycloak linking <a href="../adr/0011-keycloak-account-linking-for-acquisition-the-broker-owns-lif.md">ADR-0011</a>; sole-writer <code>can_use</code> <a href="../adr/0001-can-use-via-direct-assignment-a-write-time-invariant.md">ADR-0001</a>; per-agent consent <a href="../adr/0012-per-agent-consent-screen-writes-the-can-use-tuple.md">ADR-0012</a>.</div>
+  </section>
+  <footer><div class="nextlink"><div><div class="lab">Next flow</div><a href="approval.html">Flow C · Human approval →</a></div><div style="text-align:right"><div class="lab">Build log</div><a href="../blog/m2-token-broker.html">M2 blog →</a></div></div></footer>
+</div>

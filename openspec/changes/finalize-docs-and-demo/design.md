@@ -72,6 +72,26 @@ The gif/video records the same scripted MCP flow the smoke tests drive (discover
 login → consent → brokered token → reactive approval → FGA-filtered RAG), so the demo
 is reproducible and stays honest with the tests, not a one-off screen recording.
 
+### 6. The walkthrough suite: one master tour + per-flow deep dives, screenshot-driven
+
+The demo gif shows the flow in motion; the **walkthroughs** let a reader stop at each
+step and understand it. Structure: a single **master** end-to-end walkthrough
+(`docs/walkthroughs/index` or `end-to-end`) that narrates the headline demo as one
+story, and a **per-flow deep dive** for each of the five flows (A delegation, B
+brokering, C approval, the MCP surface, D RAG). The master links out to each deep dive;
+each deep dive links back to the master **and** to its matching M0–M5 milestone blog —
+the blogs are the *why/how-we-built-it* build log, the walkthroughs are the *here's-it-
+running, follow along* tour, so they complement rather than duplicate. Every stage
+carries a **real screenshot captured from the live stack** (consent screen, approval
+UI, Mailpit sink, Grafana dashboard rows incl. the M5 RAG row, a Tempo linked trace,
+the console span→logs jump, the RAG candidate ranking) with a one-line caption of what
+it proves. Authored as HTML (blog-style, reusing the shared design system) so they
+render on Pages under `.nojekyll`, consistent with Decision 4. *Alternative:* a single
+long walkthrough — rejected because per-flow pages stay short enough to hold in view,
+mirror the flow decomposition used everywhere else in the project, and each can anchor
+its own screenshots and blog cross-link. Screenshots are captured by driving the real
+running stack (the same flows the smoke tests exercise), so the tour stays honest.
+
 ## Risks / Trade-offs
 
 - **architecture.md drifts from the ADRs/threat model** → it *references* them rather

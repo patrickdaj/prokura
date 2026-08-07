@@ -54,6 +54,22 @@ TOOL_SPECS = [
             "required": ["to", "subject", "body"],
         },
     },
+    {
+        "name": "rag_search",
+        "description": "Search the document corpus and return only the passages the "
+                       "querying user is authorized to see. Retrieval is filtered by "
+                       "OpenFGA as the END USER (not the agent): an unauthorized "
+                       "document is never returned, even if it is the top match.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language query."},
+                "top_k": {"type": "integer",
+                          "description": "Max candidate documents to authorize (optional)."},
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 
@@ -130,11 +146,48 @@ def send_email(inbound_token: str, claims: dict, args: dict) -> dict:
     return {"status": "sent", **r.json()}
 
 
+def rag_search(inbound_token: str, claims: dict, args: dict) -> dict:
+    """Exchange the inbound token for a rag-server-audience token and hand it to the
+    RAG retriever, which authorizes candidate chunks as the end user (never the
+    agent). The inbound MCP token is never forwarded — only the exchanged
+    rag-audience token reaches the retriever, and the ``sub`` it carries is the end
+    user, so the retriever's FGA check runs as that user."""
+    query = args.get("query")
+    if not query:
+        raise ToolError("query is required")
+    user = claims.get("preferred_username")
+    body = {"query": query}
+    if args.get("top_k"):
+        body["top_k"] = args["top_k"]
+    with tracer().start_as_current_span("tool.rag_search") as span:
+        span.set_attribute("prokura.rag.query_len", len(query))
+        try:
+            rag_token = exchange_for(inbound_token, config.RAG_AUDIENCE)
+        except ExchangeError as e:
+            audit.emit(decision="exchange_failed", user=user, agent=config.MCP_CLIENT_ID,
+                       tool="rag_search", detail=str(e))
+            raise ToolError(f"token exchange failed: {e}") from e
+        r = httpx.post(f"{config.RAG_URL}/rag/search",
+                       headers={"Authorization": f"Bearer {rag_token}"},
+                       json=body, timeout=20.0)
+    if r.status_code != 200:
+        detail = _err(r)
+        audit.emit(decision="rag_denied", user=user, agent=config.MCP_CLIENT_ID,
+                   tool="rag_search", detail=detail)
+        raise ToolError(f"retriever refused ({r.status_code}): {detail}")
+    result = r.json()
+    audit.emit(decision="rag_retrieved", user=user, agent=config.MCP_CLIENT_ID,
+               tool="rag_search", detail=f"allowed={result.get('allowed')}")
+    return result
+
+
 def dispatch(name: str, inbound_token: str, claims: dict, args: dict) -> dict:
     if name == "get_provider_token":
         return get_provider_token(inbound_token, claims, args)
     if name == "send_email":
         return send_email(inbound_token, claims, args)
+    if name == "rag_search":
+        return rag_search(inbound_token, claims, args)
     raise ToolError(f"unknown tool: {name!r}")
 
 

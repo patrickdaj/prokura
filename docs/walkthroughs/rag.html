@@ -1,0 +1,107 @@
+<meta charset="utf-8">
+<title>Prokura Walkthrough — FGA-filtered RAG (Flow D)</title>
+<link rel="stylesheet" href="walkthrough.css">
+<div class="rail"><div class="wrap">
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav"><a href="index.html">← Walkthrough</a><a href="../blog/m5-rag-authorization.html">M5 blog</a></div>
+</div></div>
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Flow D · FGA-filtered RAG deep-dive</p>
+    <h1>Retrieval that stops at the permission line</h1>
+    <p class="thesis">A crafted query makes a <b>protected</b> document the #1 embedding hit for everyone.
+      The retriever authorizes each candidate <b>as the querying user</b> against OpenFGA — so the same
+      top hit reaches the one person entitled to it and <b>no one else</b>. The confused-deputy, dead.
+      All values below are captured live.</p>
+    <div class="meta"><span class="chip">authorize-as-user</span><span class="chip">OpenFGA batch-check</span><span class="chip ok">no leak</span></div>
+  </header>
+  <hr>
+
+  <section><div class="stage"><div class="idx">01</div><div>
+    <h3>The adversarial query — the protected doc is the top hit</h3>
+    <p>Both users ask the identical question. By construction <code>secret-roadmap</code> (viewer:&nbsp;alice
+      only) is the strongest embedding match — so retrieval alone would hand it to anyone. The four
+      top candidates:</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">query: "When does the Meridian acquisition close? …"</span></div>
+      <div class="body"><div class="rank">
+        <div class="row top"><span class="r">#1</span><span class="doc">secret-roadmap</span><span class="cos">top hit</span><span class="v">protected</span></div>
+        <div class="row"><span class="r">#2</span><span class="doc">shared-budget</span><span class="cos"></span><span class="v">viewers: alice, bob</span></div>
+        <div class="row"><span class="r">#3</span><span class="doc">public-handbook</span><span class="cos"></span><span class="v">public</span></div>
+        <div class="row"><span class="r">#4</span><span class="doc">bob-notes</span><span class="cos"></span><span class="v">owner: bob</span></div>
+      </div></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> embedding relevance is blind to permission — the protected doc surfaces first for everyone.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">02</div><div>
+    <h3>alice (a viewer) — retrieves it, and the answer names Meridian</h3>
+    <p>The retriever batch-checks each candidate as <code>user:alice</code>. She is a viewer of
+      <code>secret-roadmap</code>, so it survives the filter and grounds the answer.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">rag_search as alice · candidates=4 allowed=3</span></div>
+      <div class="body"><div class="rank" style="margin-bottom:14px">
+        <div class="row top"><span class="r">#1</span><span class="doc">secret-roadmap</span><span class="cos">viewer ✓</span><span class="v yes">allowed</span></div>
+        <div class="row"><span class="r">#2</span><span class="doc">shared-budget</span><span class="cos">viewer ✓</span><span class="v yes">allowed</span></div>
+        <div class="row"><span class="r">#3</span><span class="doc">public-handbook</span><span class="cos">public ✓</span><span class="v yes">allowed</span></div>
+        <div class="row filtered"><span class="r">#4</span><span class="doc">bob-notes</span><span class="cos">not a viewer</span><span class="v no">filtered</span></div>
+      </div>
+      <div class="term"><pre><span class="c">// answer (grounded on the retrieved secret-roadmap)</span>
+<span class="g">"The Meridian acquisition closes in Q3. Timeline milestones for the acquisition
+ of Meridian and the post-close integration roadmap are tracked here."</span></pre></div></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the authorized user gets the protected content — the system isn't just hiding everything.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">03</div><div>
+    <h3>bob (not a viewer) — the SAME top hit is filtered; the answer never says Meridian</h3>
+    <p>Identical query, identical #1 candidate. But <code>user:bob</code> is not a viewer of
+      <code>secret-roadmap</code>, so the batch-check drops it post-retrieval — it never reaches the model.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">rag_search as bob · candidates=4 allowed=3</span></div>
+      <div class="body"><div class="rank" style="margin-bottom:14px">
+        <div class="row top filtered"><span class="r">#1</span><span class="doc">secret-roadmap</span><span class="cos">not a viewer</span><span class="v no">filtered</span></div>
+        <div class="row"><span class="r">#2</span><span class="doc">shared-budget</span><span class="cos">viewer ✓</span><span class="v yes">allowed</span></div>
+        <div class="row"><span class="r">#3</span><span class="doc">public-handbook</span><span class="cos">public ✓</span><span class="v yes">allowed</span></div>
+        <div class="row"><span class="r">#4</span><span class="doc">bob-notes</span><span class="cos">owner ✓</span><span class="v yes">allowed</span></div>
+      </div>
+      <div class="term"><pre><span class="c">// answer (secret-roadmap was never in context)</span>
+<span class="o">"Notes from the weekly engineering sync and sprint planning. Action items for the
+ backend team, the flaky test triage, and the on-call rotation for next month."</span>
+<span class="c">// mentions Meridian: never</span></pre></div></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the top hit leaks to no one who lacks the tuple — a non-viewer simply has it filtered, silently and provably.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">04</div><div>
+    <h3>Authorize-as-the-user — as one linked trace</h3>
+    <p>Pulled live from the Tempo API: <code>rag_search</code> decomposed. The vector search
+      (<code>pgvector.top_k</code>) finds candidates; then <code>fga.batch_check</code> authorizes them
+      <b>as the querying user</b> against OpenFGA — the retriever never evaluates as the agent.</p>
+    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8095 — rag_search, decomposed</span></div>
+      <div class="body">
+<div class="wf wide">
+<div class="legend"><span><i class="bar-fga"></i>openfga</span><span><i class="bar-kc"></i>keycloak</span><span><i class="bar-mcp"></i>mcp</span><span><i class="bar-rag"></i>rag</span><span style="margin-left:auto">trace 5eb85df513035d10… · 8 key spans · 73 ms end-to-end</span></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>POST /mcp</div><div class="track"><div class="bar bar-mcp" style="left:0.0%;width:100.0%"></div></div><div class="d">73.2</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>tool.rag_search</div><div class="track"><div class="bar bar-mcp" style="left:2.5%;width:94.3%"></div></div><div class="d">69.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>keycloak.mcp_exchange</div><div class="track"><div class="bar bar-mcp" style="left:2.6%;width:16.5%"></div></div><div class="d">12.1</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:9.0%;width:6.0%"></div></div><div class="d">4.4</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-rag">rag</span>POST /rag/search</div><div class="track"><div class="bar bar-rag" style="left:32.0%;width:63.2%"></div></div><div class="d">46.3</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-rag">rag</span>pgvector.top_k (embedding search)</div><div class="track"><div class="bar bar-rag" style="left:33.5%;width:9.3%"></div></div><div class="d">6.8</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-rag">rag</span>fga.batch_check (filter as user)</div><div class="track"><div class="bar bar-rag" style="left:56.0%;width:26.1%"></div></div><div class="d">19.1</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-fga">openfga</span>BatchCheck (authz)</div><div class="track"><div class="bar bar-fga" style="left:64.0%;width:1.0%"></div></div><div class="d">0.7</div></div>
+</div>
+      </div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the authorization is on the retrieval path, evaluated as the user — visible in telemetry, not asserted.</div>
+  </div></div></section>
+
+  <section>
+    <h2>What this flow guarantees</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>Every candidate is authorized <b>as the querying user</b> (<code>user:{name} viewer document:{id}</code>) — never as the agent.</span></li>
+      <li><span class="ck">✓</span><span>A protected doc that ranks #1 by embedding reaches <b>only</b> users holding the tuple.</span></li>
+      <li><span class="ck">✓</span><span>Filtering is <b>post-retrieval and silent</b> — a non-viewer's answer simply cannot cite what they can't see.</span></li>
+    </ul>
+    <p style="margin-top:18px"></p>
+    <div class="callout">Decisions: pgvector in the existing Postgres <a href="../adr/0019-pgvector-in-the-existing-postgres-no-new-vector-container.md">ADR-0019</a>; offline embedder <a href="../adr/0020-a-local-offline-deterministic-embedder-for-rag-demo-grade.md">ADR-0020</a>; Drive-shaped ACLs <a href="../adr/0015-mailpit-sink-for-the-gated-send-drive-shaped-acls-for-rag.md">ADR-0015</a>. The attack it defeats is <a href="../threat-model.md">attack tree 4</a>.</div>
+  </section>
+  <footer><div class="nextlink"><div><div class="lab">Next</div><a href="mcp.html">The MCP surface →</a></div><div style="text-align:right"><div class="lab">Build log</div><a href="../blog/m5-rag-authorization.html">M5 blog →</a></div></div></footer>
+</div>

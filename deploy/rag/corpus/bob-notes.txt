@@ -1,0 +1,4 @@
+Bob's private meeting notes (owner-only).
+
+Notes from the weekly engineering sync and sprint planning. Action items for the
+backend team, the flaky test triage, and the on-call rotation for next month.

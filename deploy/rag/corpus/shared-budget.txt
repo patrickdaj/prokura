@@ -1,0 +1,4 @@
+Quarterly budget spreadsheet (shared with alice and bob).
+
+Headcount planning and cost centers for the next quarter. Departmental budget
+allocations, hiring plan, and the travel and tooling line items.

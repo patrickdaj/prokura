@@ -1,0 +1,59 @@
+<meta charset="utf-8">
+<title>Prokura Walkthrough — The MCP Surface</title>
+<link rel="stylesheet" href="walkthrough.css">
+<div class="rail"><div class="wrap">
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav"><a href="index.html">← Walkthrough</a><a href="../blog/m4-mcp-authorization.html">M4 blog</a></div>
+</div></div>
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Surface · the MCP server</p>
+    <h1>An authorization server a real agent connects to</h1>
+    <p class="thesis">The chain isn't driven by a library — it's driven by a <b>standard MCP client</b> that discovers the server, registers itself, logs the user in, and calls tools. Keycloak is the <b>MCP authorization server</b>; the MCP server never forwards the inbound token downstream.</p>
+    <div class="meta"><span class="chip">Keycloak as MCP AS</span><span class="chip">RFC 9728 · 8414 · 7591</span><span class="chip ok">no passthrough</span></div>
+  </header>
+  <hr>
+  <section><div class="stage"><div class="idx">01</div><div>
+    <h3>Cold start → discover → register → log in</h3>
+    <p>A cold <code>POST /mcp</code> returns a <code>401</code> whose <code>WWW-Authenticate</code> points at RFC 9728 metadata naming Keycloak. The client registers dynamically and runs OAuth 2.1 + PKCE, landing an <code>aud=mcp-server</code> token.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">:8140/mcp · handshake</span></div>
+      <div class="body term"><pre><span class="b">401</span> WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource"
+<span class="c"># PRM → authorization_servers: [ …/realms/prokura ]</span>
+<span class="c"># DCR (RFC 7591) → OAuth 2.1 + PKCE →</span>  token.aud = <span class="g">"mcp-server"</span>
+tools/list → [ <span class="g">get_provider_token</span>, <span class="g">send_email</span>, <span class="g">rag_search</span> ]</pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the exact handshake a real MCP client (Claude among them) performs — no operator involved.</div>
+  </div></div></section>
+  <section><div class="stage"><div class="idx">02</div><div>
+    <h3>Registration confers no trust</h3>
+    <p>Any client can register — that's the point of DCR. A freshly-registered client gets an <code>aud=mcp-server</code> token and <i>nothing else</i>: reaching a user's grant still needs the <code>can_use</code> consent tuple.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">gate check</span></div>
+      <div class="body term"><pre>fresh DCR client → token.aud=<span class="g">mcp-server</span>   <span class="c">// registered</span>
+get_provider_token(acme) → broker → <span class="b">403 denied_consent</span>   <span class="c">// no can_use tuple</span>
+<span class="o">// consent — not registration — is the gate</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the untrusted DCR client can't self-elevate; consent and approval are the real gates.</div>
+  </div></div></section>
+  <section><div class="stage"><div class="idx">03</div><div>
+    <h3>No token passthrough — each tool re-exchanges</h3>
+    <p>The inbound MCP token is addressed to <code>mcp-server</code>. Each tool exchanges it (RFC 8693) for the specific downstream audience it needs; presenting the raw MCP token downstream is refused.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">exchange, per hop</span></div>
+      <div class="body term"><pre>get_provider_token → exchange → aud=<span class="g">token-broker</span>
+send_email        → exchange → aud=<span class="g">agent-tools-api</span>
+rag_search        → exchange → aud=<span class="g">rag-server</span>   <span class="c">// sub preserved, azp=mcp-server</span>
+<span class="c"># inbound mcp-server token presented directly to any of them → 403</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the inbound token never leaks past the MCP boundary.</div>
+  </div></div></section>
+  <section>
+    <h2>What this surface guarantees</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>A cold request returns <b>401 + resource metadata</b> naming Keycloak (RFC 9728).</span></li>
+      <li><span class="ck">✓</span><span>A <b>dynamically-registered</b> client completes OAuth 2.1 + PKCE; a wrong-audience token is refused.</span></li>
+      <li><span class="ck">✓</span><span>The inbound MCP token is <b>never forwarded</b> — every hop is a fresh exchange.</span></li>
+    </ul>
+    <p style="margin-top:18px"></p>
+    <div class="callout">The decision to make the MCP server the headline — and the documented RFC 8707 gap (audience bound by a client scope) — is <b><a href="../adr/0013-mcp-server-as-the-headline-demo-keycloak-as-the-mcp-authoriz.md">ADR-0013</a></b>.</div>
+  </section>
+  <footer><div class="nextlink"><div><div class="lab">Back to</div><a href="index.html">The full walkthrough →</a></div><div style="text-align:right"><div class="lab">Build log</div><a href="../blog/m4-mcp-authorization.html">M4 blog →</a></div></div></footer>
+</div>

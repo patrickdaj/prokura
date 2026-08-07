@@ -127,6 +127,15 @@
   .span-detail .attr { display: grid; grid-template-columns: 130px 1fr; gap: 10px; padding: 1px 0; font-size: 11px; }
   .span-detail .attr .k { color: var(--ink-faint); }
   .span-detail .attr .v { color: var(--ink-dim); word-break: break-all; }
+  /* trace -> correlated Loki audit logs (reuses /api/loki; closes the trace↔logs loop) */
+  .span-detail .logs-toggle { margin-top: 8px; background: none; border: 0; color: var(--seal); font: inherit; font-size: 10.5px; cursor: pointer; padding: 2px 0; }
+  .span-detail .logs-toggle:hover { text-decoration: underline; }
+  .span-detail .sd-nologs { margin-top: 8px; font-size: 10.5px; color: var(--ink-faint); font-style: italic; }
+  .span-detail .sd-logs { margin-top: 6px; border-left: 2px solid var(--line-soft); padding-left: 10px; display: flex; flex-direction: column; gap: 3px; }
+  .span-detail .sd-logs-empty { font-size: 10.5px; color: var(--ink-faint); }
+  .span-detail .sd-log { font-size: 10.5px; line-height: 1.5; word-break: break-word; }
+  .span-detail .sd-log .lt { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .span-detail .sd-log .lx { color: var(--ink-dim); }
   .attr-toggle { margin-top: 8px; font-family: var(--mono); font-size: 10px; color: var(--ink-dim); background: none; border: 0; padding: 2px 0; cursor: pointer; }
   .attr-toggle:hover { color: var(--ink); }
   .attr-toggle:focus-visible { outline: 2px solid var(--seal); outline-offset: 1px; }
@@ -236,7 +245,30 @@ function spanDetailHTML(s){
     toggle = `<button class="attr-toggle" aria-expanded="false" data-more="${more}" data-less="${less}">${more}</button>`
            + `<div class="sd-all" hidden>${keys.map(k=>attrRow(k,a[k])).join('')}</div>`;
   }
-  return `<div class="span-detail"><div class="sd-name">${esc(s.name)}</div><div class="sd-hi">${hiHTML}</div>${toggle}</div>`;
+  // Trace → logs: when the span carries a domain correlation id, offer to pull its
+  // correlated audit lines from Loki inline; otherwise a graceful "nothing to correlate".
+  const logsUI = corr
+    ? `<button class="logs-toggle" data-corr="${esc(corr)}" aria-expanded="false">▸ show correlated audit logs</button><div class="sd-logs" hidden></div>`
+    : `<div class="sd-nologs">no correlation id on this span — nothing to correlate</div>`;
+  return `<div class="span-detail"><div class="sd-name">${esc(s.name)}</div><div class="sd-hi">${hiHTML}</div>${toggle}${logsUI}</div>`;
+}
+
+// Fetch and render the audit lines that share a span's correlation id (via /api/loki).
+async function loadCorrelatedLogs(corr, box, btn){
+  box.innerHTML = '<div class="sd-logs-empty">querying Loki…</div>';
+  try {
+    const q = '{service_name=~"token-broker|approval|tools-api|mcp|rag"} |= `' + corr + '`';
+    const d = await j(`/api/loki?query=${encodeURIComponent(q)}&minutes=60&limit=50`);
+    const streams = (d.data && d.data.result) || [];
+    const lines = [];
+    for(const st of streams) for(const v of (st.values||[])) lines.push([+v[0], v[1]]);
+    lines.sort((a,b)=>b[0]-a[0]);
+    if(!lines.length){ box.innerHTML = '<div class="sd-logs-empty">no correlated audit lines in the last hour</div>'; return; }
+    box.innerHTML = lines.map(([ts,txt])=>{
+      const tm = new Date(ts/1e6).toLocaleTimeString();
+      return `<div class="sd-log"><span class="lt">${tm}</span> <span class="lx">${esc(txt)}</span></div>`;
+    }).join('');
+  } catch(e){ box.innerHTML = `<div class="sd-logs-empty">log query failed: ${esc(e.message)}</div>`; }
 }
 
 function traceQL(){
@@ -325,6 +357,13 @@ async function selectTrace(id){
         const all = dt.querySelector('.sd-all'), hidden = all.hasAttribute('hidden');
         if(hidden){ all.removeAttribute('hidden'); tog.setAttribute('aria-expanded','true'); tog.textContent = tog.dataset.less; }
         else { all.setAttribute('hidden',''); tog.setAttribute('aria-expanded','false'); tog.textContent = tog.dataset.more; }
+      };
+      const lt = dt.querySelector('.logs-toggle');
+      if(lt) lt.onclick = ()=>{
+        const box = dt.querySelector('.sd-logs'), showing = !box.hasAttribute('hidden');
+        if(showing){ box.setAttribute('hidden',''); lt.setAttribute('aria-expanded','false'); lt.textContent = '▸ show correlated audit logs'; return; }
+        box.removeAttribute('hidden'); lt.setAttribute('aria-expanded','true'); lt.textContent = '▾ hide correlated audit logs';
+        loadCorrelatedLogs(lt.dataset.corr, box, lt);
       };
     };
     wf.querySelectorAll('.span-row').forEach(row=>{

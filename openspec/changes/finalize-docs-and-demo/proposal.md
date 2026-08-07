@@ -48,6 +48,17 @@ the **permanent home for the v1 roadmap** when SPEC.md is superseded.
   jump to its **correlated Loki audit logs** (query by correlation ID via the existing
   `/api/loki` proxy), closing the trace↔logs loop the observability story implies. An
   `observability` capability delta.
+- **A screenshot-rich walkthrough suite (the guided tour).** Beyond the auto-playing
+  demo gif, a set of written, **screenshot-rich** walkthroughs a reader follows to see
+  the whole system work: one **master** end-to-end walkthrough (discover/DCR → login →
+  per-agent consent → brokered provider token → human approval → FGA-filtered RAG,
+  driven by a real MCP client) **plus a per-flow deep dive** for each of delegation (A),
+  brokering (B), approval (C), the MCP surface, and RAG (D). Every stage carries a real
+  screenshot captured from the running stack — the consent screen, the approval UI,
+  Mailpit, the Grafana dashboard rows (including the M5 RAG row), a Tempo linked trace,
+  the console, and the RAG candidate ranking — and **cross-links the matching M0–M5
+  milestone blog** so the tour and the build-log narrative reinforce each other. These
+  are reader-facing docs, folded under the Pages front-door nav; not a capability.
 
 ## Capabilities
 
@@ -65,8 +76,9 @@ the **permanent home for the v1 roadmap** when SPEC.md is superseded.
 ## Impact
 
 - **New:** `docs/architecture.md` (incl. the v1 Roadmap section), a `docs/index.html`
-  Pages landing/nav page, a demo asset under `docs/` (gif/video), and the
-  `observability` delta spec.
+  Pages landing/nav page, a demo asset under `docs/` (gif/video), the **walkthrough
+  suite** (a master end-to-end walkthrough + per-flow deep dives under `docs/walkthroughs/`,
+  with captured screenshots), and the `observability` delta spec.
 - **Modified:** `README.md` (quickstart), the `docs/` site organization (Pages served
   from `main:/docs`, `.nojekyll`; existing `docs/blog/` folded under the new landing
   nav), `services/console/` (wire the trace→logs jump onto the span-detail view; the

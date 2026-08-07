@@ -160,6 +160,17 @@ def broker() -> str:
     return BROKER_URL
 
 
+# --- M5 (RAG retriever) support -----------------------------------------------
+
+RAG_URL = os.environ.get("PROKURA_RAG_URL", "http://localhost:8150")
+
+
+@pytest.fixture(scope="session")
+def rag() -> str:
+    wait_http(f"{RAG_URL}/healthz", ok=lambda r: r.status_code == 200)
+    return RAG_URL
+
+
 def admin_token() -> str:
     r = httpx.post(
         f"{KEYCLOAK_URL}/realms/master/protocol/openid-connect/token",

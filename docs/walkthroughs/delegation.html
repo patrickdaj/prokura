@@ -1,0 +1,125 @@
+<meta charset="utf-8">
+<title>Prokura Walkthrough — Delegation (Flow A)</title>
+<link rel="stylesheet" href="walkthrough.css">
+<div class="rail"><div class="wrap">
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav"><a href="index.html">← Walkthrough</a><a href="../blog/m1-token-exchange.html">M1 blog</a></div>
+</div></div>
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Flow A · delegation deep-dive</p>
+    <h1>One login becomes a scoped, single-audience token</h1>
+    <p class="thesis">An agent starts empty-handed. To act for Alice it must send her through a
+      <b>real login and an explicit consent</b> — and what it gets back is a token that says
+      <code>sub=alice</code>, <code>azp=agent</code>, addressed to <b>exactly one audience</b> and
+      valid for <b>minutes, not forever</b>. Every screen below is captured from the running stack.</p>
+    <div class="meta"><span class="chip">OAuth 2.1 + PKCE</span><span class="chip">dynamic client reg</span><span class="chip">aud-per-resource</span><span class="chip ok">≤ 900 s</span></div>
+  </header>
+  <hr>
+
+  <section><div class="stage"><div class="idx">01</div><div>
+    <h3>The agent connects the way any MCP client would — and is challenged</h3>
+    <p>No token, no shortcut. The agent hits the MCP server, gets a <code>401</code> pointing at the
+      authorization server, discovers metadata, and <b>registers itself dynamically</b> (DCR). Only then
+      can it start an OAuth 2.1 + PKCE login.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">MCP handshake</span></div>
+      <div class="body term"><pre><span class="p">$</span> POST :8140/mcp        <span class="c"># no Authorization header</span>
+<span class="b">401</span> WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource"
+<span class="p">$</span> POST :8180/realms/prokura/clients-registrations/openid-connect
+<span class="g">201</span> { "client_name": "Claude (MCP client)", "token_endpoint_auth_method": "none" }</pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the client is unprivileged until a human authenticates — there is no operator key in the loop.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">02</div><div>
+    <h3>The delegation request — a real login page</h3>
+    <p>The agent sends Alice to Keycloak's own login (PKCE-protected). This is Prokura's realm, branded,
+      with a mock external IdP option — the genuine article, not a recreation.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8180 — Sign in to Prokura</span></div>
+      <div class="body"><img src="img/flowA-01-login.png" alt="Prokura Keycloak login page"></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the human authenticates directly with the identity provider — the agent never sees the password.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">03</div><div>
+    <h3>The consent — Alice grants the agent authority, in plain words</h3>
+    <p>Before any token is minted, Keycloak shows Alice exactly what she is granting. <b>This is the
+      delegation:</b> a human, looking at named privileges, clicking Yes.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8180 — Grant access</span></div>
+      <div class="body"><img src="img/flowA-02-consent.png" alt="Consent screen: Grant Access to Claude (MCP client) — Act on your behalf"></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> authority is delegated by an informed human decision, scoped to declared privileges — not assumed by the agent.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">04</div><div>
+    <h3>Granted → a scoped, single-audience, short-lived token</h3>
+    <p>Alice's Yes returns an authorization code to the agent, which exchanges it (PKCE) for the access
+      token below. Note the three things that make it safe: it carries <b>her</b> identity, it is addressed
+      to <b>one</b> audience, and it <b>expires in 15 minutes</b>.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">127.0.0.1:9876 — agent redirect</span></div>
+      <div class="body"><img src="img/flowA-03-granted.png" alt="Delegation granted confirmation"></div>
+    </div>
+    <div class="screen" style="margin-top:12px"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">decoded access token (real claims)</span></div>
+      <div class="body term"><pre>{
+  "sub"  : "alice",              <span class="c">// the user — delegation is honest about who</span>
+  "azp"  : "Claude (MCP client)",<span class="c">// the agent that is acting</span>
+  "aud"  : "<span class="g">mcp-server</span>",         <span class="c">// exactly ONE audience</span>
+  "scope": "openid profile mcp-audience",
+  "exp"  : iat + <span class="g">900</span>            <span class="c">// ~15 min — empowered, but only for so long</span>
+}</pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the acting identity is <i>user-via-agent</i>; the token is addressed to a single resource and self-expires.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">05</div><div>
+    <h3>A foreign-audience token is refused</h3>
+    <p>Take that <code>aud=mcp-server</code> token and present it to a <i>different</i> resource — the
+      broker — and it bounces. Holding <i>a</i> token isn't enough; it must be <i>this</i> resource's token.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">broker · wrong-audience probe</span></div>
+      <div class="body term"><pre><span class="p">$</span> POST :8110/v1/tokens/acme   Authorization: Bearer &lt;aud=mcp-server&gt;
+<span class="b">403</span> <span class="o">{"error":"wrong audience: aud=['mcp-server'] does not include 'token-broker'"}</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the confused-deputy defense (F2), enforced at every service boundary.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">06</div><div>
+    <h3>Watch the delegated identity flow — as one linked trace</h3>
+    <p>Once Alice's token exists, every hop it drives shares <b>one trace id</b>. Below is a single
+      delegated action pulled live from the Tempo API and decomposed across <b>four services</b>: the
+      agent's <code>mcp_exchange</code> mints a single-audience token at Keycloak, the broker runs an
+      <code>fga.check</code> before it hands anything back, reads the grant from OpenBao, re-issues at the
+      provider, and rotates the secret — 104&nbsp;ms, end to end, nothing off-book.</p>
+    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8095 — one delegated action, decomposed</span></div>
+      <div class="body">
+<div class="wf wide">
+<div class="legend"><span><i class="bar-bao"></i>openbao</span><span><i class="bar-broker"></i>broker</span><span><i class="bar-fga"></i>openfga</span><span><i class="bar-kc"></i>keycloak</span><span><i class="bar-mcp"></i>mcp</span><span style="margin-left:auto">trace 9a8d375e4ff8f269… · 11 key spans · 104 ms end-to-end</span></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>POST /mcp</div><div class="track"><div class="bar bar-mcp" style="left:0.0%;width:100.0%"></div></div><div class="d">104.4</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>tool.get_provider_token</div><div class="track"><div class="bar bar-mcp" style="left:0.4%;width:99.1%"></div></div><div class="d">103.5</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>keycloak.mcp_exchange</div><div class="track"><div class="bar bar-mcp" style="left:0.5%;width:27.6%"></div></div><div class="d">28.8</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:16.3%;width:11.5%"></div></div><div class="d">12.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>POST /v1/tokens</div><div class="track"><div class="bar bar-broker" style="left:32.2%;width:67.1%"></div></div><div class="d">70.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>fga.check</div><div class="track"><div class="bar bar-broker" style="left:36.3%;width:5.6%"></div></div><div class="d">5.9</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-fga">openfga</span>Check (authz)</div><div class="track"><div class="bar bar-fga" style="left:40.2%;width:1.4%"></div></div><div class="d">1.5</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-bao">openbao</span>openbao.read_grant</div><div class="track"><div class="bar bar-bao" style="left:42.0%;width:1.0%"></div></div><div class="d">1.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>provider.refresh</div><div class="track"><div class="bar bar-broker" style="left:43.0%;width:49.8%"></div></div><div class="d">52.0</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:48.2%;width:44.5%"></div></div><div class="d">46.4</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-bao">openbao</span>openbao.rotate_grant</div><div class="track"><div class="bar bar-bao" style="left:93.0%;width:1.7%"></div></div><div class="d">1.8</div></div>
+</div>
+      </div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the whole delegated action is one correlated trace — the authz check and secret access happen <i>inside</i> the flow, reconstructable from telemetry alone. <a href="brokering.html">The broker/secret detail is Flow B →</a></div>
+  </div></div></section>
+
+  <section>
+    <h2>What this flow guarantees</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>Authority is granted by an <b>informed human consent</b>, not assumed by the agent.</span></li>
+      <li><span class="ck">✓</span><span>The token carries the original <b><code>sub</code></b>, the agent <b><code>azp</code></b>, and only requested scopes.</span></li>
+      <li><span class="ck">✓</span><span>It is addressed to <b>exactly one audience</b>; a foreign-audience token is refused everywhere.</span></li>
+      <li><span class="ck">✓</span><span>Every agent-held token is capped at <b>≤ 900 s</b>.</span></li>
+    </ul>
+    <p style="margin-top:18px"></p>
+    <div class="callout">The audience-per-resource rule is <b><a href="../adr/0002-each-resource-server-is-its-own-token-audience.md">ADR-0002</a></b>; the TTL honesty rule is <a href="../adr/0003-honest-ttl-keycloak-tokens-900s-provider-re-issuance-interva.md">ADR-0003</a>.</div>
+  </section>
+  <footer><div class="nextlink"><div><div class="lab">Next flow</div><a href="brokering.html">Flow B · Token brokering →</a></div><div style="text-align:right"><div class="lab">Build log</div><a href="../blog/m1-token-exchange.html">M1 blog →</a></div></div></footer>
+</div>

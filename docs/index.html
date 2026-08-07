@@ -1,0 +1,95 @@
+<meta charset="utf-8">
+<title>Prokura — Agentic Identity, Assembled</title>
+<link rel="stylesheet" href="walkthroughs/walkthrough.css">
+<style>
+  .lede{font-size:21px;}
+  .grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:6px;}
+  @media(max-width:640px){ .grid{grid-template-columns:1fr;} }
+  .navcard{display:block; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px;}
+  .navcard:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); text-decoration:none;}
+  .navcard .t{font-weight:620; color:var(--ink); font-size:16px;}
+  .navcard .d{color:var(--muted); font-size:13.5px; margin-top:4px;}
+  .navcard .ext{font-family:var(--mono); font-size:10px; color:var(--faint); letter-spacing:.08em;}
+  .steps-list{display:flex; flex-direction:column; gap:2px; font-family:var(--mono); font-size:12.5px;}
+  .steps-list a{color:var(--muted);} .steps-list a:hover{color:var(--accent);}
+  .steps-list .m{color:var(--accent);}
+</style>
+
+<div class="rail"><div class="wrap">
+  <a class="mark" href="index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav">
+    <a href="walkthroughs/index.html">Walkthrough</a>
+    <a href="blog/index.html">Blog</a>
+    <a href="https://github.com/patrickdaj/prokura">GitHub</a>
+  </div>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Open-source reference architecture</p>
+    <h1>Agentic identity, assembled</h1>
+    <p class="thesis lede">The plumbing that lets an AI agent act on your behalf — <b>without ever holding your passwords or your provider tokens</b>. User authentication, delegated authorization, third-party token brokering, human-in-the-loop approval, and fine-grained RAG authorization, built from <b>Keycloak, OpenFGA, and OpenBao</b> and reachable over <b>MCP</b>. An OSS answer to "Auth0 for AI Agents."</p>
+    <div class="meta">
+      <span class="chip ok">docker compose up</span>
+      <span class="chip">Keycloak · OpenFGA · OpenBao</span>
+      <span class="chip">non-production reference</span>
+    </div>
+  </header>
+  <hr>
+
+  <section>
+    <p class="kicker">Start here</p>
+    <h2>See it work in five minutes</h2>
+    <p class="lead">Bring up the stack, drive the headline MCP demo, and watch it as one linked trace. The <a href="walkthroughs/index.html"><b>guided walkthrough</b></a> steps through the whole thing with a faithful recreation of each screen; the <a href="https://github.com/patrickdaj/prokura#quickstart-5-minutes">README quickstart</a> is the copy-paste version.</p>
+    <div class="grid">
+      <a class="navcard" href="walkthroughs/index.html"><div class="t">The guided walkthrough →</div><div class="d">Login → consent → brokered token → human approval → FGA-filtered RAG, one stage at a time. Plus a deep-dive per flow.</div></a>
+      <a class="navcard" href="https://github.com/patrickdaj/prokura#quickstart-5-minutes"><div class="t">Quickstart <span class="ext">README ↗</span></div><div class="d">Clone, <code>docker compose up</code>, then <code>python demo/run_demo.py</code> — watch a real MCP client drive the whole chain — and open the console.</div></a>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The build log</p>
+    <h2>How each piece was built</h2>
+    <p class="lead">A milestone series — the <i>why</i> and <i>how</i> behind each capability, in order.</p>
+    <div class="grid">
+      <a class="navcard" href="blog/m1-token-exchange.html"><div class="t">M1 · Delegated token exchange</div><div class="d">A login becomes a scoped, single-audience delegated token.</div></a>
+      <a class="navcard" href="blog/m2-token-broker.html"><div class="t">M2 · The token broker</div><div class="d">Grants, per-agent consent, scoped provider tokens.</div></a>
+      <a class="navcard" href="blog/m3-human-approval.html"><div class="t">M3 · Human approval</div><div class="d">CIBA-gated, single-use, hash-bound approval.</div></a>
+      <a class="navcard" href="blog/m4-mcp-authorization.html"><div class="t">M4 · MCP authorization</div><div class="d">Keycloak as an MCP AS; the chain driven by a real client.</div></a>
+      <a class="navcard" href="blog/m5-rag-authorization.html"><div class="t">M5 · RAG authorization</div><div class="d">Retrieval filtered as the end user; the top hit that never leaks.</div></a>
+      <a class="navcard" href="blog/m6-threat-model.html"><div class="t">M6 · What the threat model found</div><div class="d">The four attack paths, and why each one closes.</div></a>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Understand it</p>
+    <h2>The reference, in depth</h2>
+    <p class="lead">The consolidated design and the three analytical lenses — control, adversary, decision. (These are Markdown; the links open their GitHub-rendered source.)</p>
+    <div class="grid">
+      <a class="navcard" href="https://github.com/patrickdaj/prokura/blob/main/docs/architecture.md"><div class="t">Architecture <span class="ext">↗</span></div><div class="d">The consolidated as-built design (supersedes <code>SPEC.md</code>) + the v1 roadmap.</div></a>
+      <a class="navcard" href="https://github.com/patrickdaj/prokura/blob/main/docs/threat-model.md"><div class="t">Threat model <span class="ext">↗</span></div><div class="d">Assets, attacker model, STRIDE per flow, four attack trees, residual register.</div></a>
+      <a class="navcard" href="https://github.com/patrickdaj/prokura/blob/main/docs/security-review.md"><div class="t">Security review <span class="ext">↗</span></div><div class="d">Control-centric audit against the security baseline + findings register.</div></a>
+      <a class="navcard" href="https://github.com/patrickdaj/prokura/tree/main/docs/adr"><div class="t">Decision records (ADRs) <span class="ext">↗</span></div><div class="d">One record per material decision — F1–F9, Q1–Q7, and the locked choices.</div></a>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Take the tour by flow</p>
+    <h2>Each flow, on its own</h2>
+    <div class="steps-list">
+      <a href="walkthroughs/delegation.html"><span class="m">Flow A</span> · Delegation — RFC 8693, audience-per-resource</a>
+      <a href="walkthroughs/brokering.html"><span class="m">Flow B</span> · Token brokering — OpenBao-scoped, consent-gated hand-out</a>
+      <a href="walkthroughs/approval.html"><span class="m">Flow C</span> · Human approval — reactive step-up, single-use tokens</a>
+      <a href="walkthroughs/rag.html"><span class="m">Flow D</span> · FGA-filtered RAG — authorize as the end user</a>
+      <a href="walkthroughs/mcp.html"><span class="m">Surface</span> · The MCP server — discovery, DCR, no passthrough</a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Source</div><a href="https://github.com/patrickdaj/prokura">github.com/patrickdaj/prokura →</a></div>
+      <div style="text-align:right"><div class="lab">License</div><span style="color:var(--muted)">Apache-2.0 · non-production reference</span></div>
+    </div>
+    <p class="note">Prokura's value is the assembly — delegation + CIBA + FGA + brokering under one identity model, reachable over MCP. The broker is a minimal subset of <a href="https://nango.dev">Nango</a>; credit where due.</p>
+  </footer>
+</div>

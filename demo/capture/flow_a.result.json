@@ -1,0 +1,22 @@
+{
+  "sub": "alice",
+  "azp": "0c2d8746-319b-43e4-8d77-ff6f13df0f8d",
+  "aud": "mcp-server",
+  "scope": "openid profile mcp-audience",
+  "lifetime_s": 900,
+  "expires_in": 900,
+  "client_id": "0c2d8746-319b-43e4-8d77-ff6f13df0f8d",
+  "claims": {
+    "exp": 1786143211,
+    "iat": 1786142311,
+    "jti": "onrtac:47fd4be0-e57e-8332-d240-88ed0e591014",
+    "iss": "http://localhost:8180/realms/prokura",
+    "aud": "mcp-server",
+    "sub": "36d26045-dc71-488e-a6ff-660b9dc2b298",
+    "typ": "Bearer",
+    "azp": "0c2d8746-319b-43e4-8d77-ff6f13df0f8d",
+    "sid": "7bGW-FgG6g6WWobe-6doeDx-",
+    "scope": "openid profile mcp-audience",
+    "preferred_username": "alice"
+  }
+}

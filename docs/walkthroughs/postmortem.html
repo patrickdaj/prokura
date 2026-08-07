@@ -1,0 +1,94 @@
+<meta charset="utf-8">
+<title>Prokura Walkthrough — Postmortem from Telemetry</title>
+<link rel="stylesheet" href="walkthrough.css">
+<div class="rail"><div class="wrap">
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav"><a href="index.html">← Walkthrough</a><a href="../architecture.md">Architecture</a></div>
+</div></div>
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Capstone · reconstruct from telemetry</p>
+    <h1>A postmortem, from telemetry alone</h1>
+    <p class="thesis">Every flow emits OpenTelemetry — <b>traces</b> to Tempo, <b>audit logs</b> to Loki,
+      <b>metrics</b> to Prometheus — stitched by a single <code>correlation_id</code> that <b>is</b> the
+      trace id. So any past action can be reconstructed and interrogated after the fact. Here we answer one
+      security question with nothing but the telemetry it left behind.</p>
+    <div class="meta"><span class="chip">Tempo</span><span class="chip">Loki</span><span class="chip">Prometheus</span><span class="chip ok">one correlation_id</span></div>
+  </header>
+  <hr>
+
+  <section>
+    <p class="kicker">The question</p>
+    <h2>When bob asked the adversarial query, did the protected roadmap reach him?</h2>
+    <p class="lead">bob ran <i>"When does the Meridian acquisition close?"</i> — the query whose #1 embedding
+      hit is <code>secret-roadmap</code>, which bob is <b>not</b> a viewer of. We never trust the answer
+      text; we reconstruct what actually happened from three independent signals, all keyed to
+      <code>correlation_id = eec3122a4d07f0cbb27ead25ff4a32bf</code>.</p>
+  </section>
+
+  <section><div class="stage"><div class="idx">A</div><div>
+    <h3>Signal 1 — the trace (Tempo): what ran, and in what order</h3>
+    <p>The action decomposed across four services. The retrieval reached <code>fga.batch_check</code>
+      → OpenFGA <b>before</b> returning — the authorization is on the path, not an afterthought.</p>
+    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">Tempo · trace eec3122a…</span></div>
+      <div class="body">
+<div class="wf wide">
+<div class="legend"><span><i class="bar-fga"></i>openfga</span><span><i class="bar-kc"></i>keycloak</span><span><i class="bar-mcp"></i>mcp</span><span><i class="bar-rag"></i>rag</span><span style="margin-left:auto">trace eec3122a4d07f0cb… · 8 key spans · 25 ms end-to-end</span></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>POST /mcp</div><div class="track"><div class="bar bar-mcp" style="left:0.0%;width:100.0%"></div></div><div class="d">25.4</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>tool.rag_search</div><div class="track"><div class="bar bar-mcp" style="left:1.3%;width:97.0%"></div></div><div class="d">24.6</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>keycloak.mcp_exchange</div><div class="track"><div class="bar bar-mcp" style="left:1.5%;width:34.5%"></div></div><div class="d">8.7</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:17.4%;width:17.2%"></div></div><div class="d">4.4</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-rag">rag</span>POST /rag/search</div><div class="track"><div class="bar bar-rag" style="left:54.9%;width:42.5%"></div></div><div class="d">10.8</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-rag">rag</span>pgvector.top_k (embedding search)</div><div class="track"><div class="bar bar-rag" style="left:56.9%;width:17.6%"></div></div><div class="d">4.5</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-rag">rag</span>fga.batch_check (filter as user)</div><div class="track"><div class="bar bar-rag" style="left:74.8%;width:20.9%"></div></div><div class="d">5.3</div></div>
+<div class="sp"><div class="nm"><span class="svc svc-fga">openfga</span>BatchCheck (authz)</div><div class="track"><div class="bar bar-fga" style="left:91.7%;width:2.6%"></div></div><div class="d">0.7</div></div>
+</div>
+      </div>
+    </div>
+    <div class="cap"><b>Reads as:</b> query embedded → top-K found → each candidate authorized as <code>user:bob</code> → response.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">B</div><div>
+    <h3>Signal 2 — the audit logs (Loki): the decision, by two services</h3>
+    <p>The same <code>correlation_id</code> appears in the mcp and rag audit streams. Both agree:
+      <b>4 candidates retrieved, 3 allowed</b> — one candidate was dropped by the filter. That dropped
+      candidate is the protected <code>secret-roadmap</code>.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">Loki · {correlation_id="eec3122a…"}</span></div>
+      <div class="body"><div class="audit">
+        <div class="ln"><span class="t">16:07:41</span> <span class="tag">mcp_audit</span> correlation_id=<span class="id">eec3122a…</span> decision=rag_retrieved user=<b>bob</b> agent=mcp-server tool=rag_search <span class="dim">detail=allowed=3</span></div>
+        <div class="ln"><span class="t">16:07:41</span> <span class="tag">rag_audit</span> correlation_id=<span class="id">eec3122a…</span> decision=retrieved user=<b>bob</b> candidates=<span class="no">4</span> allowed=<span class="ok">3</span> <span class="dim">detail=None</span></div>
+      </div></div>
+    </div>
+    <div class="cap"><b>Reads as:</b> the filter ran and removed exactly one candidate for bob — recorded independently by two services, agreeing.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">C</div><div>
+    <h3>Signal 3 — the metrics (Prometheus): the fleet was healthy around it</h3>
+    <p>A snapshot of the surrounding hour — logins, token grants, protocol requests, average latency —
+      confirms the action happened against a normally-behaving system, not a degraded one.</p>
+    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">Prometheus · 1h snapshot</span></div>
+      <div class="body"><div class="tiles">
+        <div><div class="n">29</div><div class="l">Logins · 1h</div></div>
+        <div><div class="n">8</div><div class="l">Token grants · 1h</div></div>
+        <div><div class="n">52</div><div class="l">Auth reqs · 1h</div></div>
+        <div><div class="n">10<span style="font-size:12px"> ms</span></div><div class="l">Avg latency</div></div>
+      </div></div>
+    </div>
+    <div class="cap"><b>Reads as:</b> ~15 ms end-to-end for bob's action sits well within the fleet's normal latency envelope.</div>
+  </div></div></section>
+
+  <section>
+    <h2>The verdict — no leak, proven from telemetry</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>The trace shows the retrieval reached <b>OpenFGA as <code>user:bob</code></b> before responding.</span></li>
+      <li><span class="ck">✓</span><span>Two independent audit streams agree: <b>4 candidates, 3 allowed</b> — the protected doc was filtered.</span></li>
+      <li><span class="ck">✓</span><span>Every signal is joined by one <b><code>correlation_id</code></b> — the answer text was never trusted, only the record.</span></li>
+    </ul>
+    <p style="margin-top:18px"></p>
+    <div class="callout">This is the operational payoff of the whole design: because authority decisions happen
+      on-path and are logged with a shared correlation id, <b>any</b> past action — a token hand-out, an
+      approval, a retrieval — can be audited after the fact without taking the agent's word for anything.
+      Watch it live in the <a href="../index.html">delegation-chain console</a>.</div>
+  </section>
+  <footer><div class="nextlink"><div><div class="lab">Back to</div><a href="index.html">All flows →</a></div><div style="text-align:right"><div class="lab">As built</div><a href="../architecture.md">Architecture →</a></div></div></footer>
+</div>
