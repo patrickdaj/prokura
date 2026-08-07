@@ -1,0 +1,332 @@
+<title>Prokura — M3: Human Approval</title>
+<style>
+  :root{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+      --ink:#10151c; --muted:#566372; --faint:#8794a2;
+      --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+  }
+  :root[data-theme="light"]{
+    --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+    --ink:#10151c; --muted:#566372; --faint:#8794a2;
+    --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16.5px; line-height:1.62;
+    background-image:radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 62%);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+
+  /* ---- progress rail ---- */
+  .rail{border-bottom:1px solid var(--hair); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter:blur(8px);}
+  .rail .wrap{display:flex; align-items:center; justify-content:space-between; height:56px;}
+  .mark{font-family:var(--sans); font-weight:600; letter-spacing:.42em; font-size:13px; color:var(--ink);}
+  .steps{display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;}
+  .steps span{color:var(--faint);}
+  .steps .cur{color:var(--accent);}
+  .steps .done{color:var(--muted);}
+  .steps i{color:var(--faint); font-style:normal;}
+
+  /* ---- hero ---- */
+  .hero{padding:70px 0 34px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 18px;}
+  h1{font-size:clamp(34px,6vw,52px); line-height:1.04; letter-spacing:-.02em; font-weight:640; margin:0 0 20px; text-wrap:balance;}
+  .thesis{font-size:20px; line-height:1.5; color:var(--muted); margin:0; max-width:64ch; text-wrap:pretty;}
+  .thesis b{color:var(--ink); font-weight:600;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px; font-family:var(--mono); font-size:12px;}
+  .chip{border:1px solid var(--border); border-radius:999px; padding:4px 11px; color:var(--muted); letter-spacing:.03em;}
+  .chip.status{border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); color:var(--ok);}
+  .chip.status::before{content:"●"; margin-right:6px; font-size:9px; vertical-align:1px;}
+
+  /* ---- sections ---- */
+  section{padding:34px 0;}
+  .kicker{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 6px;}
+  h2{font-size:26px; letter-spacing:-.01em; font-weight:620; margin:0 0 16px; text-wrap:balance;}
+  h3{font-size:16px; margin:0 0 6px; font-weight:620;}
+  p{margin:0 0 15px;}
+  .lead{color:var(--muted);}
+  hr{border:0; border-top:1px solid var(--hair); margin:0;}
+
+  /* ---- numbers ---- */
+  .nums{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .nums div{background:var(--panel); padding:18px 16px;}
+  .nums .n{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .nums .l{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;}
+  @media(max-width:620px){ .nums{grid-template-columns:repeat(2,1fr);} }
+
+  /* ---- architecture diagram ---- */
+  .diagram{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:26px 22px 20px;}
+  .flowrow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap;}
+  .node{flex:1 1 0; min-width:120px; background:var(--panel2); border:1px solid var(--border); border-radius:11px;
+    padding:12px 13px; position:relative;}
+  .node .t{font-weight:620; font-size:13.5px;}
+  .node .s{font-family:var(--mono); font-size:11px; color:var(--faint); margin-top:2px; letter-spacing:.02em;}
+  .node.trust{border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 16%,transparent) inset;}
+  .arrow{align-self:center; color:var(--faint); font-family:var(--mono); padding:0 6px; font-size:15px;}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; font-family:var(--mono); font-size:11.5px; color:var(--muted);}
+  .legend span::before{content:"■"; margin-right:6px;}
+  .legend .tcb::before{color:var(--accent);}
+  .legend .ext::before{color:var(--faint);}
+  .caption{font-family:var(--mono); font-size:11.5px; color:var(--faint); margin-top:14px; letter-spacing:.02em; text-align:center;}
+
+  /* ---- ledger (numbered sequence) ---- */
+  .ledger{border-top:1px solid var(--hair);}
+  .entry{display:grid; grid-template-columns:44px 1fr; gap:18px; padding:20px 0; border-bottom:1px solid var(--hair);}
+  .entry .idx{font-family:var(--mono); font-size:13px; color:var(--accent); padding-top:2px; letter-spacing:.02em;}
+  .entry h3{margin-bottom:4px;}
+  .entry p{margin:0; color:var(--muted); font-size:15px;}
+  .entry code, code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2); border:1px solid var(--hair);
+    border-radius:5px; padding:1px 5px; color:var(--ink);}
+  .gate{display:inline-block; font-family:var(--mono); font-size:11px; color:var(--ok); border:1px solid color-mix(in srgb,var(--ok) 40%,var(--border));
+    border-radius:5px; padding:0 6px; margin-right:5px; letter-spacing:.02em;}
+
+  /* ---- decisions register ---- */
+  .reg{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .reg .row{background:var(--panel); padding:18px 20px;}
+  .reg .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:7px; display:inline-block;}
+  .tag.learn{color:var(--learn);}
+  .tag.dec{color:var(--accent);}
+  .reg h3{font-size:15.5px; margin-bottom:5px;}
+  .reg p{margin:0; font-size:14.5px; color:var(--muted);}
+
+  /* ---- "seeing it work": consent card + audit ---- */
+  .show{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media(max-width:720px){ .show{grid-template-columns:1fr;} }
+  .frame{background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; display:flex; flex-direction:column;}
+  .frame .bar{display:flex; align-items:center; gap:7px; padding:9px 13px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--border);}
+  .frame .cap{padding:11px 14px; border-top:1px solid var(--hair); font-size:12.5px; color:var(--muted);}
+
+  /* consent recreation */
+  .consent{padding:22px 20px; background:linear-gradient(180deg,var(--panel2),var(--panel));}
+  .consent .wm{font-weight:600; letter-spacing:.44em; font-size:11px; text-align:center; color:var(--muted); margin-bottom:16px;}
+  .consent h4{margin:0 0 4px; font-size:15px;}
+  .consent .cs{font-size:12.5px; color:var(--muted); margin:0 0 14px; line-height:1.45;}
+  .kv{display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--hair); font-size:13px;}
+  .kv .kk{color:var(--faint);} .kv .vv{font-weight:600;}
+  .scopes{display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end;}
+  .sc{font-family:var(--mono); font-size:10.5px; background:var(--accent-soft); border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border)); color:var(--accent); border-radius:5px; padding:1px 6px;}
+  .btns{display:flex; gap:8px; margin-top:16px;}
+  .btns b{flex:1; text-align:center; border-radius:8px; padding:8px 0; font-size:12.5px; font-weight:600;}
+  .btns .allow{background:var(--accent); color:#fff;}
+  .btns .deny{border:1px solid var(--border); color:var(--muted);}
+
+  /* audit stream */
+  .stream{padding:6px 0; font-family:var(--mono); font-size:11px; line-height:1.5; overflow-x:auto;}
+  .stream .ln{padding:6px 14px; border-bottom:1px solid var(--hair); white-space:nowrap;}
+  .stream .ln:last-child{border-bottom:0;}
+  .stream .tag2{background:color-mix(in srgb,var(--learn) 22%,transparent); color:var(--learn); border-radius:3px; padding:0 4px;}
+  .stream .iss{color:var(--ok);} .stream .den{color:var(--bad);} .stream .dim{color:var(--faint);} .stream .id{color:var(--accent);}
+
+  /* verify list */
+  .checks{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+  .checks li{display:grid; grid-template-columns:20px 1fr; gap:12px; font-size:15px; color:var(--muted);}
+  .checks .ck{color:var(--ok); font-weight:700;}
+  .checks b{color:var(--ink); font-weight:600;}
+
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 18px; color:var(--muted); font-size:15px;}
+  .callout b{color:var(--ink);}
+
+  footer{border-top:1px solid var(--hair); padding:34px 0 60px; color:var(--faint); font-size:13px;}
+  .nextlink{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--hair); margin-bottom:22px; flex-wrap:wrap;}
+  .nextlink .lab{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+  .nextlink a{font-size:19px; font-weight:600;}
+  .paths{font-family:var(--mono); font-size:12px; color:var(--faint); line-height:1.8;}
+  .term{background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;}
+  .term .bar{padding:9px 14px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .term pre{margin:0; padding:15px 17px; font-family:var(--mono); font-size:12.5px; line-height:1.8; color:var(--ink); overflow-x:auto; white-space:pre;}
+  .term .p{color:var(--accent);} .term .c{color:var(--faint);} .term .o{color:var(--muted);}
+</style>
+
+<div class="rail"><div class="wrap">
+  <a class="mark" href="index.html" style="text-decoration:none">PROKURA</a>
+  <div class="steps"><a class="done" href="index.html" style="text-decoration:none">M0</a><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><span class="cur">M3</span><i>·</i><span>M4</span></div>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Milestone 03 · Build log</p>
+    <h1>The human in the loop</h1>
+    <p class="thesis">Some actions are too important to leave to prior consent. M3 makes a sensitive action <b>pause for a person</b> — who approves it in a <b>trusted screen that shows exactly what will run</b>, and gets back a credential that works <b>once, for that action only</b>. No agent-written text ever reaches the human; no Java plugin is needed.</p>
+    <div class="meta">
+      <span class="chip status">Shipped · 2026-08-07</span>
+      <span class="chip">human-approval</span>
+      <span class="chip">CIBA</span>
+      <span class="chip">agent-sdk</span>
+    </div>
+  </header>
+  <hr>
+  <section>
+    <p class="lead">M2 gave an agent a scoped third-party token, gated on consent the user gave <i>earlier</i>. But "send this email", "move this money" deserve a decision <b>at the moment they happen</b>. M3 is Prokura's Flow C: the agent asks, the action blocks, a human decides, and only an approved-and-unmodified action can run — exactly once.</p>
+    <p class="lead">The transport is Keycloak's own <b>CIBA</b> (Client-Initiated Backchannel Authentication) over its built-in HTTP channel — the thing the <a href="index.html">M0 foundation</a> spiked specifically to prove no custom Java extension would be needed. M3 turns that spike into a real approval service that joins the trusted core.</p>
+  </section>
+
+  <section>
+    <p class="kicker">By the numbers</p>
+    <div class="nums">
+      <div><div class="n">9</div><div class="l">integration tests — approve, deny, timeout, replay, tamper, spoof</div></div>
+      <div><div class="n">0</div><div class="l">Java SPIs — the built-in CIBA HTTP channel, as M0 proved</div></div>
+      <div><div class="n">once</div><div class="l">every approval yields a single-use, hash-bound action token</div></div>
+      <div><div class="n">0 params</div><div class="l">in any notification — a doorbell, never a decision</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The shape of it</p>
+    <h2>An action that stops and waits for a person</h2>
+    <p class="lead">Two new services join the stack. The <b>approval service</b> is trusted — it holds the payload, renders it to the human, and issues the single-use token. The <b>tools-api</b> is the resource server that actually performs the action, but only after the approval service confirms the exact action was approved and hasn't run before.</p>
+    <div class="diagram">
+      <div class="flowrow">
+        <div class="node"><div class="t">Agent</div><div class="s">require_approval()</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">Approval svc</div><div class="s">CIBA · payload · hash</div></div>
+        <div class="arrow">→</div>
+        <div class="node"><div class="t">Human</div><div class="s">trusted UI + ntfy</div></div>
+      </div>
+      <div class="flowrow" style="margin-top:12px;">
+        <div class="node trust"><div class="t">Keycloak</div><div class="s">CIBA HTTP channel</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">tools-api</div><div class="s">hash + single-use</div></div>
+        <div class="arrow">→</div>
+        <div class="node"><div class="t">Mailpit</div><div class="s">the action lands</div></div>
+      </div>
+      <div class="legend"><span class="tcb">Trusted computing base</span><span class="ext">Untrusted / sink</span></div>
+      <div class="caption">The approval service is the sole issuer of the single-use action token; the human decides only in the authenticated UI.</div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">How it works</p>
+    <h2>From "please send this" to "sent, once"</h2>
+    <div class="ledger">
+      <div class="entry"><div class="idx">01</div><div>
+        <h3>Register the exact action</h3>
+        <p>The agent registers a structured <code>{action, params}</code> with the approval service, which records a <b>hash</b> and returns a reference ID. That reference — never agent prose — becomes the CIBA binding message.</p>
+      </div></div>
+      <div class="entry"><div class="idx">02</div><div>
+        <h3>The action pauses on CIBA</h3>
+        <p>Keycloak POSTs the request to the approval service's channel and the agent's call <b>blocks</b>. A notification (deep link + reference only) rings the user's phone; the decision itself happens elsewhere.</p>
+      </div></div>
+      <div class="entry"><div class="idx">03</div><div>
+        <h3>A person approves what they can see</h3>
+        <p>In an authenticated screen the user sees the action and parameters <b>as stored by the service</b> — <code>"Wire $4,200 to vendor #8821"</code>, not whatever the agent claimed. Approve relays the decision to Keycloak; the agent's poll returns a token.</p>
+      </div></div>
+      <div class="entry"><div class="idx">04</div><div>
+        <h3>Run it once, exactly as approved</h3>
+        <p>The tools-api checks the audience, then asks the approval service to verify the action <b>hashes to the approved payload</b> and to <b>atomically consume</b> the reference. Tamper with a parameter and it's refused; present it twice and the replay is refused.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Decisions &amp; what we learned</p>
+    <h2>Where the ceremony had to bend</h2>
+    <div class="reg">
+      <div class="row"><span class="tag dec">Decision</span><h3>No Java plugin — the built-in CIBA HTTP channel</h3><p>M0 spiked exactly this so M3 wouldn't need a custom Keycloak extension. M3 just repoints the channel at the approval service; the delegation POST and decision callback round-trip as proven.</p></div>
+      <div class="row"><span class="tag learn">Learned</span><h3>The reference ID does not ride on Keycloak's token</h3><p>We verified against the running image: the CIBA binding message never surfaces as a claim, and adding a mapper would mean a Java SPI. So the <b>approval service</b> became the action-token authority — it issues and introspects the single-use token, keeping the binding in one trusted place.</p></div>
+      <div class="row"><span class="tag dec">Decision</span><h3>The UI renders the service's payload, never the agent's words</h3><p>The human approves what the service stored and hashed. This is the whole point of Flow C — you approve what will actually happen, not what an agent says will happen.</p></div>
+      <div class="row"><span class="tag learn">Learned</span><h3>Notifications had to be provisioned to be inert</h3><p>ntfy ships deny-all, so a publisher had to be created with write access to per-user unguessable topics only. The result is the intended property: a notification is a capability-free doorbell, and a spoofed publish is simply refused.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Seeing it work</p>
+    <h2>The approval screen and the audit trail</h2>
+    <p class="lead">On the left, the exact screen a person approves — rendered from the service, with a standing reminder that this is what will run. On the right, the approval service's realtime audit, each line carrying a correlation id that joins to the trace. Both are recreated from the real running system.</p>
+    <div class="show">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">:8120/approvals</span></div>
+        <div class="consent">
+          <div class="wm">PROKURA</div>
+          <div style="display:inline-block;font-family:var(--mono);font-size:10.5px;color:var(--learn);border:1px solid #4a3c1e;background:#211c10;border-radius:6px;padding:2px 8px;margin-bottom:12px">⚠ Review the details below — this is what will run</div>
+          <h4>Approve a sensitive action</h4>
+          <p class="cs">Details are rendered from the approval service, <b style="color:var(--ink)">not</b> from anything the agent wrote.</p>
+          <div class="kv"><span class="kk">Agent</span><span class="vv">agent-app</span></div>
+          <div class="kv"><span class="kk">Action</span><span class="vv">email.send</span></div>
+          <div class="kv"><span class="kk">Params</span><span class="vv" style="font-family:var(--mono);font-size:11px;text-align:right">to: cfo@…<br>subject: Wire $4,200</span></div>
+          <div class="btns"><b class="deny">Deny</b><b class="allow">Approve</b></div>
+        </div>
+        <div class="cap">A single-use token is issued; the action is verified against these details before it runs.</div>
+      </div>
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">Grafana · Human-approval audit</span></div>
+        <div class="stream">
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">approval_audit</span> <span class="id">id=209b…8348</span> registered ref=apr-fa84…bb98 user=alice action=email.send</div>
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">approval_audit</span> <span class="id">id=209b…8348</span> delegated ref=apr-fa84…bb98 user=alice</div>
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">approval_audit</span> <span class="id">id=5d74…b665</span> <span class="iss">approved</span> ref=apr-99a5…f193 user=alice</div>
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">approval_audit</span> <span class="id">id=5d74…b665</span> <span class="iss">consumed</span> ref=apr-99a5…f193 action=email.send</div>
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">approval_audit</span> <span class="id">id=ab21…9c0f</span> <span class="den">replay_refused</span> ref=apr-99a5…f193</div>
+        </div>
+        <div class="cap">Real event shapes. The <code>id</code> is the trace id — Loki-queryable and joined to the flow.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Run it yourself</p>
+    <h2>Approve an action, then watch it refuse to run twice</h2>
+    <p class="lead">The tests drive the whole ceremony: register, CIBA, decide, and the gated send — including the replay and tamper refusals.</p>
+    <div class="term">
+      <div class="bar">your shell · repo root · stack up, venv active (see M0 / M1)</div>
+<pre><span class="p">$</span> docker compose up -d
+
+<span class="c"># register -> CIBA -> approve -> hash-verified single-use send</span>
+<span class="c"># (plus deny, 30s timeout, replay, tamper, spoofed-notification)</span>
+<span class="p">$</span> pytest tests/smoke/test_human_approval.py \
+         tests/smoke/test_approval_notifications.py -v
+
+<span class="c"># the approver's screen (a demo driver passes the session token)</span>
+<span class="p">$</span> open http://localhost:8120/approvals</pre>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Verified by looking</p>
+    <h2>What we confirmed</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>The <b>approval screen renders the service-held payload</b> — checked in a real browser, agent text nowhere in sight.</span></li>
+      <li><span class="ck">✓</span><span>An approved action <b>runs once</b> and lands in Mailpit; a <b>replay is refused</b> and a <b>tampered parameter is refused</b>.</span></li>
+      <li><span class="ck">✓</span><span><b>Denial and the 30 s timeout</b> both abort cleanly — the agent's poll errors and nothing runs.</span></li>
+      <li><span class="ck">✓</span><span>A <b>notification leaks no parameters</b>, and a <b>spoofed publish is refused</b> and inert.</span></li>
+      <li><span class="ck">✓</span><span>The <b>audit trail</b> reaches Loki with a correlation id joining register → approve → consume.</span></li>
+    </ul>
+    <p style="margin-top:22px"></p>
+    <div class="callout"><b>What's next.</b> M4 is the headline: Keycloak as an <b>MCP authorization server</b>, so a real MCP client can drive this whole chain — login, consent, a brokered token, and a human-approved action — through standard tools.</div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Previous milestone</div><a href="m2-token-broker.html">← M2 · The Token Broker</a></div>
+      <div style="text-align:right"><div class="lab">Status</div><span style="color:var(--ok)">Shipped &amp; archived</span></div>
+    </div>
+    <div class="paths">
+      services/approval/ &nbsp;·&nbsp; CIBA channel, trusted UI, single-use token authority<br>
+      services/tools-api/ &nbsp;·&nbsp; the gated email.send resource server<br>
+      sdk/prokura-py/prokura/approval.py &nbsp;·&nbsp; require_approval()<br>
+      tests/smoke/test_{human_approval,approval_notifications}.py<br>
+      openspec/changes/archive/2026-08-07-add-human-approval/ &nbsp;·&nbsp; proposal · design · specs · tasks
+    </div>
+  </footer>
+</div>
