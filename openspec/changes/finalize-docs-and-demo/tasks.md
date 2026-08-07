@@ -37,10 +37,25 @@ now; findings/content are produced when applied.
 - [ ] 4.2 Graceful "no correlated logs" empty state when a span has no correlation ID;
   never an error or an unfiltered dump. Verify both paths in a real browser (screenshot).
 
-## 5. Verify + wrap
+## 5. Organize the GitHub Pages site (main:/docs, .nojekyll)
 
-- [ ] 5.1 Fresh-clone check: `docker-compose up`, follow the README quickstart verbatim,
+- [ ] 5.1 Add `docs/index.html`: a landing/front-door page with navigation unifying
+  the architecture doc, the milestone blog series (`docs/blog/`), the threat model, the
+  ADRs, the security-review summary, the READMEs, and the quickstart. Consistent
+  header/nav/styling with the existing blog pages.
+- [ ] 5.2 Author the architecture doc's public face as HTML (blog-style); for the
+  frequently-edited Markdown (threat model, ADRs, security summary, READMEs) link to
+  the GitHub-rendered source rather than duplicating as HTML. No dead links.
+- [ ] 5.3 Confirm the Pages source (legacy build, `main` → `/docs`, `.nojekyll`) serves
+  the organized site; nav reaches every reader-facing artifact from one front door.
+
+## 6. Verify + wrap
+
+- [ ] 6.1 Fresh-clone check: `docker-compose up`, follow the README quickstart verbatim,
   confirm the demo runs and the console trace→logs jump works — **by looking**, not by
   asserting APIs alone.
-- [ ] 5.2 Confirm architecture.md is internally consistent with the final threat model,
+- [ ] 6.2 Load the live Pages site (`patrickdaj.github.io/prokura`) in a real browser:
+  landing page renders, nav works, no broken links, blog + architecture reachable —
+  verify by looking, not just by checking the deploy status.
+- [ ] 6.3 Confirm architecture.md is internally consistent with the final threat model,
   ADRs, and security-review findings; SPEC.md superseded. Archive is the next action.

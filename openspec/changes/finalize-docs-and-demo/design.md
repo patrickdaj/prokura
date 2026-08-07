@@ -50,7 +50,23 @@ to spans), add a control that queries `/api/loki` for that ID and renders the au
 lines inline. No backend change, no new dependency. A "no correlated logs" empty state
 mirrors the graceful-state discipline used on the approval screen.
 
-### 4. Demo capture is a scripted, reproducible flow
+### 4. GitHub Pages: a curated HTML front door; markdown stays GitHub-rendered
+
+Pages is a **legacy build from `main:/docs` with `.nojekyll`** — so `.md` files are
+served as raw text, not HTML (which is why the blog is authored as bespoke HTML). The
+decision: publish a `docs/index.html` landing page + consistent nav that unifies the
+already-HTML blog series with the other reader-facing artifacts, author the
+**architecture doc's public face as HTML** (matching the blog's style), and for the
+frequently-edited Markdown (threat model, ADRs, security-review summary, READMEs)
+**link to their GitHub-rendered source** rather than maintain parallel HTML copies —
+keeping a single source of truth. *Alternatives:* (a) drop `.nojekyll` and adopt
+Jekyll to auto-render Markdown — rejected: it fights the bespoke blog HTML and adds
+config for little gain; (b) a client-side Markdown renderer in the site — viable but
+more moving parts than linking out. The exact HTML-vs-link split per doc is settled at
+apply time, once the final docs exist. The nav must degrade gracefully (no dead links
+to docs a given reader's build hasn't produced yet).
+
+### 5. Demo capture is a scripted, reproducible flow
 
 The gif/video records the same scripted MCP flow the smoke tests drive (discover/DCR →
 login → consent → brokered token → reactive approval → FGA-filtered RAG), so the demo

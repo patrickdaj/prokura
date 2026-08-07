@@ -34,6 +34,16 @@ the **permanent home for the v1 roadmap** when SPEC.md is superseded.
 - **Demo gif/video.** The headline MCP flow captured end to end: DCR/login → per-agent
   consent → brokered provider token → human-approved action → FGA-filtered RAG, all
   through a real MCP client, with the live trace/console alongside.
+- **Organized GitHub Pages site.** The repo already publishes to GitHub Pages (legacy
+  build, `main` → `/docs`, live at `patrickdaj.github.io/prokura`) but has **no
+  landing page** (only `docs/blog/index.html` exists) and the docs are scattered
+  files. Organize `/docs` into a coherent published site: a `docs/index.html` front
+  door with navigation unifying the architecture doc, the milestone blog series, the
+  threat model, the ADRs, the security-review summary, the READMEs, and the
+  quickstart — every reader-facing artifact reachable from one place. Resolve how
+  Markdown renders under `.nojekyll` (GitHub Pages does **not** auto-convert `.md`
+  there, so long-form docs need an HTML rendering or an explicit link to the
+  GitHub-rendered source).
 - **Console → Loki logs jump.** From a selected trace/span in the bespoke console,
   jump to its **correlated Loki audit logs** (query by correlation ID via the existing
   `/api/loki` proxy), closing the trace↔logs loop the observability story implies. An
@@ -54,11 +64,14 @@ the **permanent home for the v1 roadmap** when SPEC.md is superseded.
 
 ## Impact
 
-- **New:** `docs/architecture.md` (incl. the v1 Roadmap section), a demo asset under
-  `docs/` (gif/video), and the `observability` delta spec.
-- **Modified:** `README.md` (quickstart), `services/console/` (wire the trace→logs
-  jump onto the span-detail view; the `/api/loki` proxy already exists), and `SPEC.md`
-  (mark superseded, pointing at `docs/architecture.md`).
+- **New:** `docs/architecture.md` (incl. the v1 Roadmap section), a `docs/index.html`
+  Pages landing/nav page, a demo asset under `docs/` (gif/video), and the
+  `observability` delta spec.
+- **Modified:** `README.md` (quickstart), the `docs/` site organization (Pages served
+  from `main:/docs`, `.nojekyll`; existing `docs/blog/` folded under the new landing
+  nav), `services/console/` (wire the trace→logs jump onto the span-detail view; the
+  `/api/loki` proxy already exists), and `SPEC.md` (mark superseded, pointing at
+  `docs/architecture.md`).
 - **Ordering:** runs on `apply` **after** the other three M6 changes
   (security-review → expand-threat-model → adr-reconciliation → **this**), because the
   architecture doc is the capstone that references their outputs and is where SPEC.md
