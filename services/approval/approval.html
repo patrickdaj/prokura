@@ -29,27 +29,34 @@
   .note { margin-top:18px; font-size:11.5px; color:#6b7987; line-height:1.5; }
   .result { margin-top:16px; font-size:13.5px; display:none; }
   .result.ok { color:#4ade80; display:block; } .result.err { color:#f87171; display:block; }
+  .state { text-align:center; padding:16px 6px 8px; }
+  .state h2 { font-size:16px; font-weight:600; margin:0 0 9px; color:#e7ebf0; }
+  .state p { color:#93a0ad; font-size:13.5px; line-height:1.55; margin:0 auto; max-width:34ch; }
+  .state .ref { margin-top:16px; font-family:ui-monospace,monospace; font-size:11px; color:#6b7987; word-break:break-all; }
 </style>
 </head>
 <body>
   <div>
     <p class="wordmark">PROKURA</p>
     <div class="card" id="card">
-      <div class="warn">⚠ Review the details below — this is what will run</div>
-      <h1>Approve a sensitive action</h1>
-      <p class="sub">An agent is asking to perform an action on your behalf. The details are
-        rendered from the approval service, <b style="color:#e7ebf0">not</b> from anything the agent wrote.</p>
-      <div class="row"><span class="k">Agent</span><span class="v" id="agent">—</span></div>
-      <div class="row"><span class="k">Action</span><span class="v" id="action">—</span></div>
-      <div class="row"><span class="k">Reference</span><span class="v" id="ref" style="font-family:ui-monospace,monospace;font-size:12px">—</span></div>
-      <div class="params" id="params">loading…</div>
-      <div class="actions">
-        <button class="deny" id="deny">Deny</button>
-        <button class="approve" id="approve">Approve</button>
+      <div id="approval" hidden>
+        <div class="warn">⚠ Review the details below — this is what will run</div>
+        <h1>Approve a sensitive action</h1>
+        <p class="sub">An agent is asking to perform an action on your behalf. The details are
+          rendered from the approval service, <b style="color:#e7ebf0">not</b> from anything the agent wrote.</p>
+        <div class="row"><span class="k">Agent</span><span class="v" id="agent">—</span></div>
+        <div class="row"><span class="k">Action</span><span class="v" id="action">—</span></div>
+        <div class="row"><span class="k">Reference</span><span class="v" id="ref" style="font-family:ui-monospace,monospace;font-size:12px">—</span></div>
+        <div class="params" id="params">loading…</div>
+        <div class="actions">
+          <button class="deny" id="deny">Deny</button>
+          <button class="approve" id="approve">Approve</button>
+        </div>
+        <div class="result" id="result"></div>
+        <p class="note">Approving lets the agent run this exact action once. A single-use token
+          is issued and the action is verified against these details before it executes.</p>
       </div>
-      <div class="result" id="result"></div>
-      <p class="note">Approving lets the agent run this exact action once. A single-use token
-        is issued and the action is verified against these details before it executes.</p>
+      <div id="state" class="state" hidden></div>
     </div>
   </div>
 <script>
@@ -57,17 +64,33 @@
   const ref = q.get("ref") || location.hash.replace("#","");
   const token = q.get("token") || "";
   const $ = (id) => document.getElementById(id);
-  const result = $("result");
+  const esc = (s) => String(s).replace(/[<>&"]/g, "");
+  function state(title, msg, showRef) {
+    $("approval").hidden = true;
+    const s = $("state"); s.hidden = false;
+    s.innerHTML = "<h2>" + title + "</h2><p>" + msg + "</p>" +
+      (showRef && ref ? '<div class="ref">' + esc(ref) + "</div>" : "");
+  }
   async function load() {
-    const r = await fetch("/approval/" + encodeURIComponent(ref), {
-      headers: { "Authorization": "Bearer " + token } });
-    if (!r.ok) { $("params").textContent = "Could not load this approval."; return; }
+    let r;
+    try {
+      r = await fetch("/approval/" + encodeURIComponent(ref), { headers: { "Authorization": "Bearer " + token } });
+    } catch (e) {
+      return state("Can’t reach the approval service", "Please try again in a moment.");
+    }
+    if (r.status === 404) return state("Approval not found", "This request may have expired, or it was already decided. Nothing will run.", true);
+    if (r.status === 401 || r.status === 403) return state("Sign in to review", "This approval opens in your authenticated session — follow the link from your notification while signed in.");
+    if (!r.ok) return state("Couldn’t load this approval", "Something went wrong (HTTP " + r.status + ").", true);
     const a = await r.json();
+    if (a.status && a.status !== "pending" && a.status !== "delegated")
+      return state("Already " + esc(a.status), "This request was already decided — nothing further will run.", true);
+    $("state").hidden = true; $("approval").hidden = false;
     $("agent").textContent = a.agent; $("action").textContent = a.action;
     $("ref").textContent = a.ref;
     $("params").textContent = JSON.stringify(a.params, null, 2);
   }
   async function decide(decision) {
+    const result = $("result");
     const r = await fetch("/approval/" + encodeURIComponent(ref) + "/decide", {
       method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({ decision }) });
@@ -76,10 +99,13 @@
     result.textContent = r.ok
       ? (decision === "approve" ? "✓ Approved — the agent may now run this action once." : "Denied — the action will not run.")
       : "✗ " + (b.error || ("HTTP " + r.status));
+    if (r.ok) { $("approve").disabled = true; $("deny").disabled = true; }
   }
   $("approve").onclick = () => decide("approve");
   $("deny").onclick = () => decide("deny");
-  if (ref && token) load(); else $("params").textContent = "Missing reference or session.";
+  if (!ref) state("No approval to review", "You’ve reached the approval screen without a specific request. Approvals open from the link in your notification.");
+  else if (!token) state("Sign in to review", "This approval opens in your authenticated session — follow the link from your notification while signed in.");
+  else load();
 </script>
 </body>
 </html>
