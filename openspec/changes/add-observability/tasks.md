@@ -14,8 +14,9 @@
 
 ## 3. Dashboard as code
 
-- [x] 3.1 Create `deploy/lgtm/` provisioning: datasource config (as needed beyond the image defaults) and dashboard JSON auto-loaded at startup
-- [x] 3.2 Build "delegation chain" dashboard v1 (7 panels: logins stat, identity-events rate, live realm-event log stream, request-rooted traces, req/s by endpoint, p95 latency, service graph — FGA activity visible via traces/service graph since FGA exports no scrapeable-into-LGTM metrics; Bao activity via audit file until M2) — convention noted in dashboard description
+- [x] 3.1 Create `deploy/lgtm/` provisioning: dashboard provider yaml + JSON auto-loaded at startup
+- [x] 3.2 Grafana dashboard (drill-down): 4 stat tiles + 2 timeseries + realm-event log stream. VERIFIED RENDERING in-browser — the first attempt rendered blank because `traces`/`nodeGraph` panel types crash Grafana 13's render silently; removed them (the console owns waterfalls)
+- [x] 3.3 Bespoke Prokura Console (`services/console/`, port 8095) — headline interactive view: clickable delegation-chain spine (service filters), live trace stream, click-a-trace span waterfall (Keycloak + OpenFGA), vitals footer + audit sparkline. Proxies Prometheus/Loki/Tempo via Grafana's datasource API. Verified in-browser.
 
 ## 4. Telemetry smoke tests
 

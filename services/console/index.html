@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Prokura — Delegation Chain</title>
+<style>
+  :root {
+    --bg: #0d1017;
+    --panel: #141a24;
+    --panel-2: #1a212d;
+    --line: #263041;
+    --line-soft: #1c2431;
+    --ink: #eef2f7;
+    --ink-dim: #93a1b5;
+    --ink-faint: #5c6a7e;
+    --seal: #d8a24a;          /* authority / brand accent */
+    --seal-dim: #7a5f2c;
+    /* per-service identity — used on spine AND waterfall spans */
+    --kc: #5b9bf0;
+    --fga: #46c98b;
+    --bao: #d8a24a;
+    --ciba: #a98bec;
+    --mail: #8aa0b8;
+    --ok: #46c98b; --warn: #d8a24a; --err: #e5766b;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--mono);
+    font-size: 13px; line-height: 1.4; height: 100vh; display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
+
+  /* ── header ─────────────────────────────────────────── */
+  header {
+    display: flex; align-items: center; gap: 20px; padding: 12px 20px;
+    border-bottom: 1px solid var(--line); flex: none;
+  }
+  .brand { display: flex; align-items: baseline; gap: 11px; }
+  .seal {
+    font-family: var(--mono); font-weight: 700; font-size: 16px; letter-spacing: .18em;
+    color: var(--bg); background: var(--seal); padding: 3px 9px 3px 11px; border-radius: 3px;
+  }
+  .tag { color: var(--ink-faint); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+  .spacer { flex: 1; }
+  .ranges { display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+  .ranges button {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-dim); background: none; border: 0;
+    padding: 4px 10px; border-radius: 4px; cursor: pointer;
+  }
+  .ranges button[aria-pressed="true"] { background: var(--panel-2); color: var(--ink); }
+  .ranges button:focus-visible { outline: 2px solid var(--seal); outline-offset: 1px; }
+  .live { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--ink-dim); min-width: 148px; justify-content: flex-end; }
+  .pip { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(70,201,139,.55)} 70%{box-shadow:0 0 0 6px rgba(70,201,139,0)} 100%{box-shadow:0 0 0 0 rgba(70,201,139,0)} }
+
+  /* ── delegation spine ───────────────────────────────── */
+  .spine { display: flex; gap: 0; padding: 12px 20px; border-bottom: 1px solid var(--line); flex: none; }
+  .link {
+    flex: 1; display: flex; flex-direction: column; gap: 3px; padding: 9px 13px; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--panel); position: relative;
+    transition: border-color .15s, background .15s;
+  }
+  .link + .link { margin-left: 26px; }
+  .link + .link::before { content:"›"; position:absolute; left:-19px; top:50%; transform:translateY(-50%); color:var(--ink-faint); font-size:16px; }
+  .link:hover { background: var(--panel-2); }
+  .link[aria-pressed="true"] { border-color: var(--svc); }
+  .link:focus-visible { outline: 2px solid var(--seal); outline-offset: 1px; }
+  .link .role { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .link .svc { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .link .svc::before { content:""; width: 8px; height: 8px; border-radius: 2px; background: var(--svc); }
+  .link .stat { font-size: 11px; color: var(--ink-dim); }
+
+  /* ── main split ─────────────────────────────────────── */
+  main { flex: 1; display: grid; grid-template-columns: minmax(360px, 42%) 1fr; min-height: 0; }
+  .col { display: flex; flex-direction: column; min-height: 0; }
+  .col.left { border-right: 1px solid var(--line); }
+  .col-head { display: flex; align-items: center; justify-content: space-between; padding: 9px 16px; border-bottom: 1px solid var(--line-soft); flex: none; }
+  .col-head .h { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+  .col-head .sub { font-size: 11px; color: var(--ink-faint); }
+  .scroll { overflow-y: auto; min-height: 0; flex: 1; }
+
+  /* trace rows */
+  .trace {
+    display: grid; grid-template-columns: 62px 1fr 54px; gap: 10px; align-items: center;
+    padding: 8px 16px; cursor: pointer; border-bottom: 1px solid var(--line-soft); border-left: 2px solid transparent;
+  }
+  .trace:hover { background: var(--panel); }
+  .trace[aria-selected="true"] { background: var(--panel-2); border-left-color: var(--seal); }
+  .trace:focus-visible { outline: none; background: var(--panel-2); }
+  .trace .tm { color: var(--ink-faint); font-size: 11px; }
+  .trace .nm { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trace .nm .svc-badge { color: var(--svc); font-weight: 600; }
+  .trace .dur { text-align: right; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .trace .dur.slow { color: var(--warn); }
+
+  /* waterfall */
+  .wf-empty { color: var(--ink-faint); padding: 40px 20px; text-align: center; font-size: 12px; }
+  .wf-meta { padding: 12px 18px; border-bottom: 1px solid var(--line-soft); flex: none; }
+  .wf-meta .title { font-size: 13px; color: var(--ink); font-weight: 600; }
+  .wf-meta .id { font-size: 11px; color: var(--ink-faint); margin-top: 3px; }
+  .wf-meta .chips { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .chip { font-size: 10px; padding: 2px 7px; border-radius: 10px; border: 1px solid var(--svc); color: var(--svc); }
+  .wf { padding: 8px 0; overflow-y: auto; flex: 1; min-height: 0; }
+  .span-row { display: grid; grid-template-columns: 220px 1fr 58px; gap: 10px; align-items: center; padding: 2px 18px; height: 24px; }
+  .span-row:hover { background: var(--panel); }
+  .span-name { font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .span-name .d { color: var(--ink-faint); }
+  .span-track { position: relative; height: 12px; }
+  .span-bar { position: absolute; height: 12px; border-radius: 3px; min-width: 2px; }
+  .span-dur { text-align: right; font-size: 10px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  /* ── vitals footer ──────────────────────────────────── */
+  footer { display: grid; grid-template-columns: repeat(4, auto) 1fr; gap: 0; border-top: 1px solid var(--line); flex: none; align-items: stretch; }
+  .vital { padding: 9px 18px; border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 2px; }
+  .vital .k { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); }
+  .vital .v { font-size: 20px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .vital .v .u { font-size: 11px; color: var(--ink-faint); font-weight: 400; margin-left: 3px; }
+  .sparkwrap { padding: 6px 18px; display: flex; flex-direction: column; justify-content: center; }
+  .sparkwrap .k { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="seal">PROKURA</span><span class="tag">delegation chain</span></div>
+    <div class="spacer"></div>
+    <div class="ranges" id="ranges" role="group" aria-label="time range">
+      <button data-min="15" aria-pressed="false">15m</button>
+      <button data-min="60" aria-pressed="true">1h</button>
+      <button data-min="360" aria-pressed="false">6h</button>
+    </div>
+    <div class="live"><span class="pip"></span><span id="updated">connecting…</span></div>
+  </header>
+
+  <!-- clickable spine: click a link to filter the trace stream to that service -->
+  <nav class="spine" id="spine" aria-label="filter traces by service">
+    <button class="link" data-svc="all"     style="--svc:var(--seal)" aria-pressed="true"><span class="role">all</span><span class="svc">Everything</span><span class="stat" id="s-all">—</span></button>
+    <button class="link" data-svc="keycloak" style="--svc:var(--kc)"  aria-pressed="false"><span class="role">authenticate</span><span class="svc">Keycloak</span><span class="stat" id="s-kc">—</span></button>
+    <button class="link" data-svc="openfga"  style="--svc:var(--fga)" aria-pressed="false"><span class="role">authorize</span><span class="svc">OpenFGA</span><span class="stat" id="s-fga">—</span></button>
+    <button class="link" data-svc="openbao"  style="--svc:var(--bao)" aria-pressed="false" disabled title="visible via broker spans in M2"><span class="role">secrets</span><span class="svc">OpenBao</span><span class="stat">file audit · M2</span></button>
+    <button class="link" data-svc="ciba"     style="--svc:var(--ciba)" aria-pressed="false" disabled title="approval service lands in M3"><span class="role">approve</span><span class="svc">CIBA</span><span class="stat">ready · M3</span></button>
+  </nav>
+
+  <main>
+    <section class="col left">
+      <div class="col-head"><span class="h">Trace stream</span><span class="sub" id="trace-filter">everything · click a row</span></div>
+      <div class="scroll" id="traces"><div class="wf-empty">loading traces…</div></div>
+    </section>
+    <section class="col">
+      <div class="col-head"><span class="h">Span waterfall</span><span class="sub">one delegated action, decomposed</span></div>
+      <div id="detail" style="display:flex;flex-direction:column;min-height:0;flex:1">
+        <div class="wf-empty">Select a trace to see how the action flowed through the stack.</div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="vital"><span class="k">Logins · 1h</span><span class="v" id="v-logins">—</span></div>
+    <div class="vital"><span class="k">Token grants · 1h</span><span class="v" id="v-grants">—</span></div>
+    <div class="vital"><span class="k">Auth reqs · 1h</span><span class="v" id="v-reqs">—</span></div>
+    <div class="vital"><span class="k">Avg latency</span><span class="v" id="v-lat">—<span class="u">ms</span></span></div>
+    <div class="sparkwrap"><span class="k">Identity events / min · 30m</span><svg id="spark" width="100%" height="34" preserveAspectRatio="none"></svg></div>
+  </footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const CSS = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+const SVC = { keycloak: CSS('--kc'), openfga: CSS('--fga'), openbao: CSS('--bao'), ciba: CSS('--ciba'), mailpit: CSS('--mail') };
+let RANGE = 60, FILTER = 'all', SELECTED = null;
+
+async function j(url){ const r = await fetch(url); if(!r.ok) throw new Error(r.status); return r.json(); }
+const promI = async q => { const d = await j(`/api/prom/instant?query=${encodeURIComponent(q)}`); const r=d?.data?.result; const v=r&&r.length?parseFloat(r[0].value[1]):null; return Number.isFinite(v)?v:null; };
+const fmt = (v,dp=0) => v==null?'—':v.toLocaleString(undefined,{maximumFractionDigits:dp});
+
+function traceQL(){
+  if (FILTER==='keycloak') return '{ resource.service.name="keycloak" && trace:rootName=~"GET.*|POST.*" }';
+  if (FILTER==='openfga')  return '{ resource.service.name="openfga" && name!~"grpc.health.*" }';
+  return '{ trace:rootName=~"GET.*|POST.*|PUT.*" }';
+}
+function svcOf(name){ return /token|authenticate|realms|auth/i.test(name)?'keycloak':/check|batch|write|fga|grpc/i.test(name)?'openfga':'keycloak'; }
+
+async function loadTraces(){
+  try {
+    const d = await j(`/api/tempo/search?q=${encodeURIComponent(traceQL())}&minutes=${RANGE}&limit=40`);
+    const traces = (d.traces||[]).sort((a,b)=>(+b.startTimeUnixNano)-(+a.startTimeUnixNano));
+    const el = $('#traces');
+    if(!traces.length){ el.innerHTML = '<div class="wf-empty">no traces in this window</div>'; return; }
+    el.innerHTML = traces.map(t=>{
+      const svc = t.rootServiceName||'keycloak'; const col = SVC[svc]||CSS('--ink-dim');
+      const ms = Math.round(t.durationMs||0); const tm = new Date((+t.startTimeUnixNano)/1e6).toLocaleTimeString();
+      const nm = (t.rootTraceName||'').replace(/^(GET|POST|PUT)\s+/,m=>m);
+      return `<div class="trace" role="option" tabindex="0" data-id="${t.traceID}" style="--svc:${col}" aria-selected="${SELECTED===t.traceID}">
+        <span class="tm">${tm}</span>
+        <span class="nm"><span class="svc-badge">${svc}</span> ${nm}</span>
+        <span class="dur ${ms>100?'slow':''}">${ms}ms</span></div>`;
+    }).join('');
+    el.querySelectorAll('.trace').forEach(row=>{
+      const open = ()=>selectTrace(row.dataset.id);
+      row.onclick = open;
+      row.onkeydown = e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); open(); } };
+    });
+  } catch(e){ $('#traces').innerHTML = `<div class="wf-empty">trace query failed: ${e.message}</div>`; }
+}
+
+async function selectTrace(id){
+  SELECTED = id;
+  document.querySelectorAll('.trace').forEach(r=>r.setAttribute('aria-selected', r.dataset.id===id));
+  const det = $('#detail'); det.innerHTML = '<div class="wf-empty">loading waterfall…</div>';
+  try {
+    const d = await j(`/api/tempo/trace/${id}`);
+    const spans = [];
+    for(const b of (d.batches||[])){
+      const svc = (b.resource?.attributes||[]).find(a=>a.key==='service.name')?.value?.stringValue || '?';
+      for(const ss of (b.scopeSpans||[])) for(const s of (ss.spans||[])){
+        spans.push({ svc, name:s.name, start:+s.startTimeUnixNano, end:+s.endTimeUnixNano, parent:s.parentSpanId||'' });
+      }
+    }
+    if(!spans.length){ det.innerHTML='<div class="wf-empty">no spans in this trace</div>'; return; }
+    const t0 = Math.min(...spans.map(s=>s.start)), t1 = Math.max(...spans.map(s=>s.end));
+    const total = Math.max(1,(t1-t0)); spans.sort((a,b)=>a.start-b.start);
+    const svcs = [...new Set(spans.map(s=>s.svc))];
+    const rootName = spans[0].name;
+    const rows = spans.map(s=>{
+      const col = SVC[s.svc]||CSS('--ink-dim');
+      const left = ((s.start-t0)/total)*100, w = ((s.end-s.start)/total)*100;
+      const ms = ((s.end-s.start)/1e6);
+      const short = s.name.length>34 ? s.name.slice(0,33)+'…' : s.name;
+      return `<div class="span-row" title="${s.svc} · ${s.name} · ${ms.toFixed(2)}ms">
+        <span class="span-name"><span class="d">${s.svc}</span> ${short}</span>
+        <span class="span-track"><span class="span-bar" style="left:${left}%;width:${Math.max(w,0.5)}%;background:${col}"></span></span>
+        <span class="span-dur">${ms<1?ms.toFixed(2):ms.toFixed(1)}</span></div>`;
+    }).join('');
+    det.innerHTML = `
+      <div class="wf-meta">
+        <div class="title">${rootName}</div>
+        <div class="id">${id} · ${spans.length} spans · ${(total/1e6).toFixed(1)}ms total</div>
+        <div class="chips">${svcs.map(s=>`<span class="chip" style="--svc:${SVC[s]||CSS('--ink-dim')}">${s}</span>`).join('')}</div>
+      </div>
+      <div class="wf">${rows}</div>`;
+  } catch(e){ det.innerHTML = `<div class="wf-empty">could not load trace: ${e.message}</div>`; }
+}
+
+function drawSpark(series){
+  const svg=$('#spark'), W=svg.clientWidth||560, H=34, NS='http://www.w3.org/2000/svg'; svg.innerHTML='';
+  const all=series.flatMap(s=>s.pts); if(!all.length) return;
+  const t0=Math.min(...all.map(p=>p[0])), t1=Math.max(...all.map(p=>p[0])), vmax=Math.max(1,...all.map(p=>p[1]));
+  const x=t=>(t1===t0?0:(t-t0)/(t1-t0))*W, y=v=>H-2-(v/vmax)*(H-4);
+  const mk=(n,a)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+  for(const s of series){ if(!s.pts.length) continue;
+    const d=s.pts.map((p,i)=>`${i?'L':'M'}${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`).join(' ');
+    svg.appendChild(mk('path',{d,fill:'none',stroke:s.color,'stroke-width':1.6,'stroke-linejoin':'round'}));
+  }
+}
+
+async function loadVitals(){
+  try{
+    const [lo,gr,rq,la,ev] = await Promise.all([
+      promI('sum(increase(keycloak_user_events_total{event="login"}[1h]))'),
+      promI('sum(increase(keycloak_user_events_total{event="code_to_token"}[1h]))'),
+      promI('sum(increase(http_server_requests_milliseconds_count{uri=~".*protocol.*"}[1h]))'),
+      promI('sum(increase(http_server_requests_milliseconds_sum[1h]))/sum(increase(http_server_requests_milliseconds_count[1h]))'),
+      j(`/api/prom/range?query=${encodeURIComponent('sum by (event) (rate(keycloak_user_events_total[2m]))*60')}&minutes=30&step=60`),
+    ]);
+    $('#v-logins').textContent=fmt(lo); $('#v-grants').textContent=fmt(gr);
+    $('#v-reqs').textContent=fmt(rq); $('#v-lat').innerHTML=fmt(la,1)+'<span class="u">ms</span>';
+    $('#s-all').textContent = `${fmt(rq)} requests`; $('#s-kc').textContent=`${fmt(lo)} logins`; $('#s-fga').textContent='authz checks';
+    const res=ev?.data?.result||[]; const pick=n=>{const s=res.find(r=>r.metric.event===n);return s?s.values.map(([t,v])=>[t*1000,parseFloat(v)]):[];};
+    drawSpark([{pts:pick('login'),color:SVC.keycloak},{pts:pick('code_to_token'),color:SVC.openfga}]);
+  }catch(e){ /* leave prior values */ }
+}
+
+$('#ranges').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return;
+  RANGE=+b.dataset.min; [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed', x===b)); loadTraces(); });
+$('#spine').addEventListener('click', e=>{ const b=e.target.closest('.link'); if(!b||b.disabled) return;
+  FILTER=b.dataset.svc; [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed', x===b));
+  $('#trace-filter').textContent = (FILTER==='all'?'everything':FILTER)+' · click a row'; loadTraces(); });
+
+async function tick(){ await Promise.all([loadTraces(), loadVitals()]); $('#updated').textContent='updated '+new Date().toLocaleTimeString(); }
+tick(); setInterval(tick, 5000);
+</script>
+</body>
+</html>

@@ -51,13 +51,20 @@ docker compose --profile spike up -d --build
 
 ## Observability
 
-The stack ships with realtime telemetry: **Grafana at `http://localhost:3001`**
-(no login) with Tempo (traces), Loki (logs), and Prometheus (metrics)
-pre-provisioned, plus the **Prokura — Delegation Chain** dashboard: login
-activity, a live realm-event audit stream, request-rooted traces, latency, and
-a trace-derived service graph.
+Two views onto the same live telemetry:
 
-Useful queries (Explore → Tempo):
+- **Prokura Console — `http://localhost:8095`** (the headline). A bespoke,
+  interactive dashboard: the delegation chain as clickable service filters, a
+  live trace stream, and — the signature — click any trace to expand its **span
+  waterfall**, decomposing one delegated action across services (Keycloak's
+  Argon2 hashing, OpenFGA's ReBAC check resolution, …). Vitals and a live audit
+  sparkline sit in the footer.
+- **Grafana — `http://localhost:3001`** (no login). Metric/log drill-down plus
+  Explore for ad-hoc trace waterfalls. The provisioned *Prokura — Delegation
+  Chain* dashboard has stat tiles, identity-event and request-rate timeseries,
+  and the realm-event log stream.
+
+Useful Tempo query (Grafana Explore → Tempo):
 
 ```traceql
 {trace:rootName =~ "GET.*|POST.*|PUT.*|PATCH.*"}   # real activity only, no healthcheck noise
@@ -65,16 +72,17 @@ Useful queries (Explore → Tempo):
 
 How each component is observable: Keycloak exports traces, metrics, and logs
 via OTLP (realm events appear in the Loki stream in realtime); OpenFGA exports
-traces; OpenBao has no trace support — its authoritative record is the file
-audit device (`docker compose exec openbao cat /tmp/bao-audit.log`), and its
-operations become trace-visible through caller-side spans once the broker
-lands. Correlation convention: W3C `traceparent` joins spans across services;
+traces (its authorization checks decompose into ReBAC resolution spans);
+OpenBao has no OTLP/trace export — its authoritative record is the file audit
+device (`docker compose exec openbao cat /tmp/bao-audit.log`), and its
+operations become trace-visible through caller-side spans once the broker lands
+(M2). Correlation convention: W3C `traceparent` joins spans across services;
 domain IDs (`prokura.correlation_id`, approval reference IDs) ride as span
 attributes and log fields — instrumentation is part of the definition of done
 for every Prokura service.
 
 Telemetry is fire-and-forget: stop the `lgtm` container and everything else
-keeps working (telemetry smoke tests skip; the rest of the suite passes).
+keeps working (telemetry/console smoke tests skip; the rest of the suite passes).
 
 ## Prior art
 

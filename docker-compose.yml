@@ -138,6 +138,17 @@ services:
       - ./deploy/lgtm/prokura-provider.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/prokura.yaml:ro
       - ./deploy/lgtm/dashboards:/otel-lgtm/prokura-dashboards:ro
 
+  # Prokura Console — bespoke headline dashboard (dark, self-contained),
+  # proxying Prometheus/Loki/Tempo through Grafana's datasource API.
+  console:
+    build: ./services/console
+    ports:
+      - "8095:8095"
+    environment:
+      GRAFANA_URL: http://lgtm:3000
+    depends_on:
+      - lgtm
+
   # M0 spike (F6-A): receives Keycloak's CIBA delegation POSTs and returns
   # decisions on Keycloak's callback endpoint. Profile-gated; enable with
   #   docker compose --profile spike up -d

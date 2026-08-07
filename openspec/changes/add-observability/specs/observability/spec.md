@@ -31,15 +31,26 @@ Keycloak and OpenFGA SHALL export their native telemetry to the bundled collecto
 - **THEN** the access appears in OpenBao's audit device output
 
 ### Requirement: Bundled receiver with provisioned dashboard
-The compose stack SHALL include a single dev-mode LGTM receiver (Grafana + Tempo + Loki + Prometheus) with datasources pre-provisioned and a "delegation chain" dashboard bundled from the repo — no manual Grafana setup. The stack MUST remain functional if the receiver is down (telemetry is fire-and-forget; no service depends on it).
+The compose stack SHALL include a single dev-mode LGTM receiver (Grafana + Tempo + Loki + Prometheus) with datasources pre-provisioned and a "delegation chain" dashboard bundled from the repo — no manual Grafana setup. The provisioned dashboard MUST actually render (verified visually, not only via the dashboards API — exotic panel types such as `traces`/`nodegraph` can crash Grafana's render silently). The stack MUST remain functional if the receiver is down (telemetry is fire-and-forget; no service depends on it).
 
 #### Scenario: Zero-setup dashboard
 - **WHEN** the stack comes up from a clean clone and a user opens Grafana
-- **THEN** the delegation-chain dashboard exists and renders against pre-provisioned datasources without any manual configuration
+- **THEN** the delegation-chain dashboard exists and its panels render against pre-provisioned datasources without any manual configuration
 
 #### Scenario: Telemetry outage is non-fatal
 - **WHEN** the receiver container is stopped
 - **THEN** logins, FGA checks, and Bao operations continue to succeed
+
+### Requirement: Bespoke console is the headline view
+The stack SHALL serve a bespoke, self-contained observability console (its own container) as the primary human-facing view, distinct from Grafana (which remains for ad-hoc drill-down). The console SHALL be interactive — not a static readout: it presents the delegation chain as clickable service filters and a live trace stream where selecting a trace renders its span waterfall. It queries Prometheus, Loki, and Tempo through Grafana's datasource proxy (same-origin, no CORS). It MUST surface more than one service's telemetry — at minimum Keycloak and OpenFGA traces — so the cross-service story is visible, not just Keycloak logs.
+
+#### Scenario: Interactive trace drill-down
+- **WHEN** a user selects a trace in the console's stream
+- **THEN** the span waterfall for that trace renders, showing per-span service, name, and duration
+
+#### Scenario: Cross-service visibility
+- **WHEN** the user filters the trace stream to OpenFGA
+- **THEN** OpenFGA authorization traces appear (health-check noise excluded), decomposing into the ReBAC resolution spans — demonstrating visibility beyond Keycloak
 
 ### Requirement: Audit events are watchable in realtime
 Audit-relevant events (broker issuances/denials once the broker exists; Keycloak realm events; Bao audit lines) SHALL be queryable in the log backend (Loki) within seconds of occurring, carrying their correlation IDs, so an operator can watch the audit trail live rather than only querying it after the fact.

@@ -1,130 +1,81 @@
 {
-  "uid": "prokura-delegation",
-  "title": "Prokura — Delegation Chain",
-  "description": "Realtime view of the identity stack. v1 scope (pre-M2): Keycloak traces/metrics/events, OpenFGA traces, service graph. Broker + approval panels join in M2/M3 with correlation-ID search. Convention: every milestone adding a service updates this dashboard.",
-  "tags": ["prokura"],
-  "timezone": "browser",
-  "schemaVersion": 39,
+  "annotations": { "list": [ {
+    "builtIn": 1,
+    "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+    "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)",
+    "name": "Annotations & Alerts", "type": "dashboard"
+  } ] },
+  "description": "Prokura identity stack — power-user drill-down. The bespoke console (:8095) is the headline view; use this for ad-hoc metric/log exploration and Explore for trace waterfalls. Panels grow as milestones add services (M2 broker, M3 approval).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": true,
   "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["prokura"],
+  "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Prokura — Delegation Chain",
+  "uid": "prokura-delegation",
+  "version": 1,
   "panels": [
     {
-      "id": 1,
-      "type": "stat",
-      "title": "Logins (1h)",
-      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 8 },
+      "id": 1, "type": "stat", "title": "Logins (1h)",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(increase(keycloak_user_events_total{event=\"login\"}[1h]))"
-        }
-      ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] }
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value", "textMode": "value" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(keycloak_user_events_total{event=\"login\"}[1h]))" } ]
     },
     {
-      "id": 2,
-      "type": "timeseries",
-      "title": "Identity events / min",
-      "gridPos": { "x": 4, "y": 0, "w": 10, "h": 8 },
+      "id": 2, "type": "stat", "title": "Token grants (1h)",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (event) (rate(keycloak_user_events_total[$__rate_interval])) * 60",
-          "legendFormat": "{{event}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "pointSize": 4 }
-        },
-        "overrides": []
-      },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "green" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value", "textMode": "value" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(keycloak_user_events_total{event=\"code_to_token\"}[1h]))" } ]
     },
     {
-      "id": 3,
-      "type": "logs",
-      "title": "Realm events — live audit stream",
-      "gridPos": { "x": 14, "y": 0, "w": 10, "h": 8 },
+      "id": 3, "type": "stat", "title": "Auth requests (1h)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "none", "textMode": "value" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(http_server_requests_milliseconds_count{uri=~\".*protocol.*\"}[1h]))" } ]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Avg request latency",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ms", "decimals": 1 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "none", "textMode": "value" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(http_server_requests_milliseconds_sum[1h]))/sum(increase(http_server_requests_milliseconds_count[1h]))" } ]
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Identity events / min",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 5 },
+      "fieldConfig": { "defaults": { "unit": "none", "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] }, "tooltip": { "mode": "multi" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (event) (rate(keycloak_user_events_total[2m])) * 60", "legendFormat": "{{event}}" } ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Auth requests / sec by endpoint",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 5 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] }, "tooltip": { "mode": "multi" } },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (uri) (rate(http_server_requests_milliseconds_count{uri!~\"/health.*|/metrics\"}[$__rate_interval]))", "legendFormat": "{{uri}}" } ]
+    },
+    {
+      "id": 7, "type": "logs", "title": "Realm events — live audit stream",
       "datasource": { "type": "loki", "uid": "loki" },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "{service_name=\"keycloak\"} |= \"type=\\\"\""
-        }
-      ],
-      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
-    },
-    {
-      "id": 4,
-      "type": "traces",
-      "title": "Request-rooted traces (no healthchecks, no housekeeping)",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 9 },
-      "datasource": { "type": "tempo", "uid": "tempo" },
-      "targets": [
-        {
-          "refId": "A",
-          "queryType": "traceql",
-          "query": "{trace:rootName =~ \"GET.*|POST.*|PUT.*|PATCH.*\"}",
-          "limit": 20
-        }
-      ]
-    },
-    {
-      "id": 5,
-      "type": "timeseries",
-      "title": "HTTP req/s by endpoint (Keycloak)",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 9 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (uri) (rate(http_server_requests_milliseconds_count{uri!~\"/health.*|/metrics\"}[$__rate_interval]))",
-          "legendFormat": "{{uri}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "pointSize": 4 }
-        },
-        "overrides": []
-      },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 6,
-      "type": "timeseries",
-      "title": "p95 request latency (Keycloak)",
-      "gridPos": { "x": 0, "y": 17, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_milliseconds_bucket[$__rate_interval])))",
-          "legendFormat": "p95"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms",
-          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "pointSize": 4 }
-        },
-        "overrides": []
-      },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 7,
-      "type": "nodeGraph",
-      "title": "Service graph (from traces)",
-      "gridPos": { "x": 12, "y": 17, "w": 12, "h": 8 },
-      "datasource": { "type": "tempo", "uid": "tempo" },
-      "targets": [{ "refId": "A", "queryType": "serviceMap" }]
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 14 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true, "dedupStrategy": "none" },
+      "targets": [ { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "expr": "{service_name=\"keycloak\"} |= \"type=\\\"\"" } ]
     }
   ]
 }
