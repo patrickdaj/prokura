@@ -1,0 +1,25 @@
+model
+  schema 1.1
+
+type user
+
+type agent
+  relations
+    define operator: [user]          # the human this agent instance acts for
+
+type grant                            # a third-party OAuth grant (user x provider)
+  relations
+    define owner: [user]
+    define can_use: [agent]          # F1-A: direct assignment; the broker is the
+                                     # sole tuple writer and enforces
+                                     # operator == owner at write time
+
+type document
+  relations
+    define owner: [user]
+    define viewer: [user, user:*] or owner
+
+type tool
+  relations
+    define invoker: [agent]
+    define requires_approval: [agent]  # membership => CIBA required

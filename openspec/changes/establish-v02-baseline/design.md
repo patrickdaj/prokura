@@ -43,5 +43,15 @@ Greenfield repo; no rollback concerns. Sequence: specs land (this change) → M0
 
 ## Open Questions
 
-- Spike verdict (to be recorded here at M0 completion): does the built-in CIBA HTTP channel deliver `binding_message` and accept the decision callback on Keycloak 26.4+? 
-- Exact Keycloak image pin (26.4.x patch level) after checking current CVEs at implementation time.
+(None — both resolved at M0 completion.)
+
+## Spike Verdict (resolved, M0)
+
+**The built-in CIBA HTTP channel works on Keycloak 26.7.1 — the Java SPI is deleted from the plan.** All four paths verified against the live stack (`spike/ciba-http-channel/test_spike.py`): delegation POST arrives at the external endpoint with `binding_message` and bearer token; SUCCEED via the callback yields a token on the CIBA poll; UNAUTHORIZED yields `access_denied`; undecided requests stay `authorization_pending`. M3 is now Python + configuration.
+
+Integration facts the approval service must honor (discovered in the spike):
+1. The delegation endpoint MUST return **HTTP 201** — Keycloak treats 200 as "unexpected response from authentication device" (503 to the initiating client).
+2. The delegation JWT's issuer is validated at the callback — `KC_HOSTNAME` must be pinned (compose: `http://localhost:8180`, `KC_HOSTNAME_BACKCHANNEL_DYNAMIC=false`) so host-side and container-side callers see the same issuer.
+3. Keycloak realm-import quirk: declaring `clientScopes` suppresses ALL built-in scopes — `basic` (sub mapper, `access.token.claim=true` required) and `profile` must be defined explicitly or `sub` silently vanishes from tokens.
+
+Image pins (resolved): Keycloak 26.7.1, OpenFGA v1.18.3, OpenBao 2.6.1, ntfy v2.27.0, Mailpit v1.30.6, Postgres 17-alpine.

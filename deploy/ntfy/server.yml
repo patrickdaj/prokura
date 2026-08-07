@@ -1,0 +1,14 @@
+# Prokura self-hosted ntfy — F7-A+B: notifications are capability-free
+# doorbells; approval decisions happen ONLY in the Keycloak-session-gated UI.
+#
+# Access model: deny-all by default; no anonymous publish or subscribe.
+# The approval service authenticates to publish; per-user topics use random
+# (unguessable) names of the form approvals-<user_id>-<random 16 hex>,
+# provisioned by the approval service, as defense in depth on top of ACLs.
+
+base-url: "http://localhost:8090"
+auth-file: "/var/lib/ntfy/auth.db"
+auth-default-access: "deny-all"
+enable-signup: false
+enable-login: true
+behind-proxy: false

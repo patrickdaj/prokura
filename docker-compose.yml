@@ -1,0 +1,118 @@
+# Prokura dev stack — NON-PRODUCTION (dev-mode components, documented dev creds).
+# Minimum Keycloak: 26.4 (MCP AS support, stored-IdP-token refresh); pinned below.
+name: prokura
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-prokura}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prokura-dev}
+      POSTGRES_DB: ${POSTGRES_DB:-prokura}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-prokura}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.1
+    command:
+      - start-dev
+      - --import-realm
+      - --health-enabled=true
+      # F6-A spike: built-in CIBA HTTP authentication channel (Keycloak 26+ double-dash SPI form)
+      - --spi-ciba-auth-channel--ciba-http-auth-channel--http-authentication-channel-uri=http://ciba-spike:8000/ciba/delegate
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
+      # Fixed hostname so token issuers match from both the host (localhost:8180)
+      # and inside the compose network (keycloak:8080) — the CIBA callback
+      # validates the delegation JWT's issuer.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "false"
+    volumes:
+      - ./deploy/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - "8180:8080" # host 8180: leaves 8080 free for other local stacks
+      - "9000:9000" # management (health)
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  openfga:
+    image: openfga/openfga:v1.18.3
+    command: run
+    ports:
+      - "8081:8080" # HTTP API (gRPC stays internal on 8081)
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=localhost:8081"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  openfga-init:
+    image: curlimages/curl:8.16.0
+    volumes:
+      - ./deploy/openfga:/deploy:ro
+    entrypoint: ["/bin/sh", "/deploy/init.sh"]
+    environment:
+      FGA_API_URL: http://openfga:8080
+      FGA_STORE_NAME: prokura
+    depends_on:
+      openfga:
+        condition: service_healthy
+
+  openbao:
+    image: openbao/openbao:2.6.1
+    command: server -dev -dev-root-token-id=${BAO_DEV_ROOT_TOKEN:-prokura-dev-root} -dev-listen-address=0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  openbao-init:
+    image: openbao/openbao:2.6.1
+    volumes:
+      - ./deploy/openbao/init.sh:/init.sh:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
+    environment:
+      BAO_ADDR: http://openbao:8200
+      BAO_TOKEN: ${BAO_DEV_ROOT_TOKEN:-prokura-dev-root}
+    depends_on:
+      openbao:
+        condition: service_healthy
+
+  ntfy:
+    image: binwiederhier/ntfy:v2.27.0
+    command: serve
+    volumes:
+      - ./deploy/ntfy/server.yml:/etc/ntfy/server.yml:ro
+      - ntfy-data:/var/lib/ntfy
+    ports:
+      - "8090:80"
+
+  mailpit:
+    image: axllent/mailpit:v1.30.6
+    ports:
+      - "1025:1025" # SMTP sink
+      - "8025:8025" # web UI + API
+
+  # M0 spike (F6-A): receives Keycloak's CIBA delegation POSTs and returns
+  # decisions on Keycloak's callback endpoint. Profile-gated; enable with
+  #   docker compose --profile spike up -d
+  ciba-spike:
+    profiles: ["spike"]
+    build: ./spike/ciba-http-channel
+    ports:
+      - "8000:8000"
+
+volumes:
+  ntfy-data:

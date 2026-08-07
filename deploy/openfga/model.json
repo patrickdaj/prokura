@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    { "type": "user" },
+    {
+      "type": "agent",
+      "relations": { "operator": { "this": {} } },
+      "metadata": {
+        "relations": {
+          "operator": { "directly_related_user_types": [{ "type": "user" }] }
+        }
+      }
+    },
+    {
+      "type": "grant",
+      "relations": {
+        "owner": { "this": {} },
+        "can_use": { "this": {} }
+      },
+      "metadata": {
+        "relations": {
+          "owner": { "directly_related_user_types": [{ "type": "user" }] },
+          "can_use": { "directly_related_user_types": [{ "type": "agent" }] }
+        }
+      }
+    },
+    {
+      "type": "document",
+      "relations": {
+        "owner": { "this": {} },
+        "viewer": {
+          "union": {
+            "child": [
+              { "this": {} },
+              { "computedUserset": { "relation": "owner" } }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "owner": { "directly_related_user_types": [{ "type": "user" }] },
+          "viewer": {
+            "directly_related_user_types": [
+              { "type": "user" },
+              { "type": "user", "wildcard": {} }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "tool",
+      "relations": {
+        "invoker": { "this": {} },
+        "requires_approval": { "this": {} }
+      },
+      "metadata": {
+        "relations": {
+          "invoker": { "directly_related_user_types": [{ "type": "agent" }] },
+          "requires_approval": { "directly_related_user_types": [{ "type": "agent" }] }
+        }
+      }
+    }
+  ]
+}
