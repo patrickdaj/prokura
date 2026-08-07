@@ -114,6 +114,23 @@
   .span-track { position: relative; height: 12px; }
   .span-bar { position: absolute; height: 12px; border-radius: 3px; min-width: 2px; }
   .span-dur { text-align: right; font-size: 10px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .span-row { cursor: pointer; }
+  .span-row[aria-expanded="true"] { background: var(--panel); }
+  .span-row:focus-visible { outline: 2px solid var(--seal); outline-offset: -2px; }
+  .span-name .caret { color: var(--ink-faint); display: inline-block; width: 9px; transition: transform .12s; }
+  @media (prefers-reduced-motion: reduce) { .span-name .caret { transition: none; } }
+  .span-row[aria-expanded="true"] .span-name .caret { transform: rotate(90deg); }
+
+  /* span detail (inline accordion) */
+  .span-detail { padding: 8px 18px 12px 39px; border-bottom: 1px solid var(--line-soft); background: var(--panel-2); }
+  .span-detail .sd-name { font-size: 11px; color: var(--ink); word-break: break-all; margin-bottom: 7px; }
+  .span-detail .attr { display: grid; grid-template-columns: 130px 1fr; gap: 10px; padding: 1px 0; font-size: 11px; }
+  .span-detail .attr .k { color: var(--ink-faint); }
+  .span-detail .attr .v { color: var(--ink-dim); word-break: break-all; }
+  .attr-toggle { margin-top: 8px; font-family: var(--mono); font-size: 10px; color: var(--ink-dim); background: none; border: 0; padding: 2px 0; cursor: pointer; }
+  .attr-toggle:hover { color: var(--ink); }
+  .attr-toggle:focus-visible { outline: 2px solid var(--seal); outline-offset: 1px; }
+  .sd-all { margin-top: 5px; border-top: 1px solid var(--line-soft); padding-top: 5px; }
 
   /* ── vitals footer ──────────────────────────────────── */
   footer { display: grid; grid-template-columns: repeat(4, auto) 1fr; gap: 0; border-top: 1px solid var(--line); flex: none; align-items: stretch; }
@@ -176,6 +193,51 @@ let RANGE = 60, FILTER = 'all', SELECTED = null;
 async function j(url){ const r = await fetch(url); if(!r.ok) throw new Error(r.status); return r.json(); }
 const promI = async q => { const d = await j(`/api/prom/instant?query=${encodeURIComponent(q)}`); const r=d?.data?.result; const v=r&&r.length?parseFloat(r[0].value[1]):null; return Number.isFinite(v)?v:null; };
 const fmt = (v,dp=0) => v==null?'—':v.toLocaleString(undefined,{maximumFractionDigits:dp});
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// Unwrap an OTLP typed attribute value into a plain string.
+function attrVal(v){
+  if(v==null) return '';
+  if('stringValue' in v) return v.stringValue;
+  if('intValue' in v)    return String(v.intValue);
+  if('boolValue' in v)   return String(v.boolValue);
+  if('doubleValue' in v) return String(v.doubleValue);
+  if('arrayValue' in v)  return (v.arrayValue.values||[]).map(attrVal).join(', ');
+  return JSON.stringify(v);
+}
+
+// Build the inline detail block for one span: full name, curated highlights, show-all.
+function spanDetailHTML(s){
+  const a = {}; for(const at of (s.attrs||[])) a[at.key] = attrVal(at.value);
+  const ms = ((s.end-s.start)/1e6).toFixed(2);
+  const hi = [];
+  const method = a['http.request.method'] || a['http.method'];
+  const path   = a['url.path'] || a['http.target'] || a['url.full'];
+  const route  = a['http.route'];
+  const rpc    = (a['rpc.service']||a['rpc.method'])
+    ? `${a['rpc.service']||''}${a['rpc.method']?(a['rpc.service']?'/':'')+a['rpc.method']:''}` : '';
+  const db     = a['db.statement'] || a['db.system'];
+  const httpStatus = a['http.response.status_code'] || a['http.status_code'];
+  const otel = ({0:'UNSET',1:'OK',2:'ERROR'})[(s.status&&s.status.code)||0];
+  const corr = a['prokura.correlation_id'];
+  if(method) hi.push(['Method',method]);
+  if(path)   hi.push(['Path',path]);
+  if(route)  hi.push(['Route',route]);
+  if(rpc)    hi.push(['RPC',rpc]);
+  if(db)     hi.push(['DB',db]);
+  hi.push(['Status', `${otel}${httpStatus?' ('+httpStatus+')':''} · ${ms}ms`]);
+  if(corr)   hi.push(['Correlation',corr]);
+  const attrRow = (k,v)=>`<div class="attr"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`;
+  const hiHTML = hi.map(([k,v])=>attrRow(k,v)).join('');
+  const keys = Object.keys(a).sort(), n = keys.length;
+  let toggle = '';
+  if(n){
+    const more = `▸ show all ${n} attribute${n===1?'':'s'}`, less = '▾ hide attributes';
+    toggle = `<button class="attr-toggle" aria-expanded="false" data-more="${more}" data-less="${less}">${more}</button>`
+           + `<div class="sd-all" hidden>${keys.map(k=>attrRow(k,a[k])).join('')}</div>`;
+  }
+  return `<div class="span-detail"><div class="sd-name">${esc(s.name)}</div><div class="sd-hi">${hiHTML}</div>${toggle}</div>`;
+}
 
 function traceQL(){
   if (FILTER==='keycloak') return '{ resource.service.name="keycloak" && trace:rootName=~"GET.*|POST.*" }';
@@ -217,7 +279,8 @@ async function selectTrace(id){
     for(const b of (d.batches||[])){
       const svc = (b.resource?.attributes||[]).find(a=>a.key==='service.name')?.value?.stringValue || '?';
       for(const ss of (b.scopeSpans||[])) for(const s of (ss.spans||[])){
-        spans.push({ svc, name:s.name, start:+s.startTimeUnixNano, end:+s.endTimeUnixNano, parent:s.parentSpanId||'' });
+        spans.push({ svc, name:s.name, start:+s.startTimeUnixNano, end:+s.endTimeUnixNano, parent:s.parentSpanId||'',
+          attrs:s.attributes||[], status:s.status||{}, kind:s.kind });
       }
     }
     if(!spans.length){ det.innerHTML='<div class="wf-empty">no spans in this trace</div>'; return; }
@@ -225,13 +288,13 @@ async function selectTrace(id){
     const total = Math.max(1,(t1-t0)); spans.sort((a,b)=>a.start-b.start);
     const svcs = [...new Set(spans.map(s=>s.svc))];
     const rootName = spans[0].name;
-    const rows = spans.map(s=>{
+    const rows = spans.map((s,i)=>{
       const col = SVC[s.svc]||CSS('--ink-dim');
       const left = ((s.start-t0)/total)*100, w = ((s.end-s.start)/total)*100;
       const ms = ((s.end-s.start)/1e6);
       const short = s.name.length>34 ? s.name.slice(0,33)+'…' : s.name;
-      return `<div class="span-row" title="${s.svc} · ${s.name} · ${ms.toFixed(2)}ms">
-        <span class="span-name"><span class="d">${s.svc}</span> ${short}</span>
+      return `<div class="span-row" data-i="${i}" role="button" tabindex="0" aria-expanded="false" title="${s.svc} · ${s.name} · ${ms.toFixed(2)}ms">
+        <span class="span-name"><span class="caret">›</span> <span class="d">${s.svc}</span> ${short}</span>
         <span class="span-track"><span class="span-bar" style="left:${left}%;width:${Math.max(w,0.5)}%;background:${col}"></span></span>
         <span class="span-dur">${ms<1?ms.toFixed(2):ms.toFixed(1)}</span></div>`;
     }).join('');
@@ -242,6 +305,33 @@ async function selectTrace(id){
         <div class="chips">${svcs.map(s=>`<span class="chip" style="--svc:${SVC[s]||CSS('--ink-dim')}">${s}</span>`).join('')}</div>
       </div>
       <div class="wf">${rows}</div>`;
+
+    // Inline accordion: click a span to inspect its attributes; one open at a time.
+    const wf = det.querySelector('.wf');
+    let openIdx = null;
+    const closeDetail = ()=>{
+      const d = wf.querySelector('.span-detail'); if(d) d.remove();
+      wf.querySelectorAll('.span-row[aria-expanded="true"]').forEach(r=>r.setAttribute('aria-expanded','false'));
+      openIdx = null;
+    };
+    const toggleSpan = (i,row)=>{
+      if(openIdx===i){ closeDetail(); return; }
+      closeDetail();
+      row.setAttribute('aria-expanded','true');
+      row.insertAdjacentHTML('afterend', spanDetailHTML(spans[i]));
+      openIdx = i;
+      const dt = row.nextElementSibling, tog = dt.querySelector('.attr-toggle');
+      if(tog) tog.onclick = ()=>{
+        const all = dt.querySelector('.sd-all'), hidden = all.hasAttribute('hidden');
+        if(hidden){ all.removeAttribute('hidden'); tog.setAttribute('aria-expanded','true'); tog.textContent = tog.dataset.less; }
+        else { all.setAttribute('hidden',''); tog.setAttribute('aria-expanded','false'); tog.textContent = tog.dataset.more; }
+      };
+    };
+    wf.querySelectorAll('.span-row').forEach(row=>{
+      const i = +row.dataset.i;
+      row.onclick = ()=>toggleSpan(i,row);
+      row.onkeydown = e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleSpan(i,row); } };
+    });
   } catch(e){ det.innerHTML = `<div class="wf-empty">could not load trace: ${e.message}</div>`; }
 }
 
