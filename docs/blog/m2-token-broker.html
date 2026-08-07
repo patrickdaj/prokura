@@ -1,0 +1,347 @@
+<title>Prokura — M2: The Token Broker</title>
+<style>
+  :root{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+      --ink:#10151c; --muted:#566372; --faint:#8794a2;
+      --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+  }
+  :root[data-theme="light"]{
+    --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+    --ink:#10151c; --muted:#566372; --faint:#8794a2;
+    --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16.5px; line-height:1.62;
+    background-image:radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 62%);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+
+  /* ---- progress rail ---- */
+  .rail{border-bottom:1px solid var(--hair); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter:blur(8px);}
+  .rail .wrap{display:flex; align-items:center; justify-content:space-between; height:56px;}
+  .mark{font-family:var(--sans); font-weight:600; letter-spacing:.42em; font-size:13px; color:var(--ink);}
+  .steps{display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;}
+  .steps span{color:var(--faint);}
+  .steps .cur{color:var(--accent);}
+  .steps .done{color:var(--muted);}
+  .steps i{color:var(--faint); font-style:normal;}
+
+  /* ---- hero ---- */
+  .hero{padding:70px 0 34px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 18px;}
+  h1{font-size:clamp(34px,6vw,52px); line-height:1.04; letter-spacing:-.02em; font-weight:640; margin:0 0 20px; text-wrap:balance;}
+  .thesis{font-size:20px; line-height:1.5; color:var(--muted); margin:0; max-width:64ch; text-wrap:pretty;}
+  .thesis b{color:var(--ink); font-weight:600;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px; font-family:var(--mono); font-size:12px;}
+  .chip{border:1px solid var(--border); border-radius:999px; padding:4px 11px; color:var(--muted); letter-spacing:.03em;}
+  .chip.status{border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); color:var(--ok);}
+  .chip.status::before{content:"●"; margin-right:6px; font-size:9px; vertical-align:1px;}
+
+  /* ---- sections ---- */
+  section{padding:34px 0;}
+  .kicker{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 6px;}
+  h2{font-size:26px; letter-spacing:-.01em; font-weight:620; margin:0 0 16px; text-wrap:balance;}
+  h3{font-size:16px; margin:0 0 6px; font-weight:620;}
+  p{margin:0 0 15px;}
+  .lead{color:var(--muted);}
+  hr{border:0; border-top:1px solid var(--hair); margin:0;}
+
+  /* ---- numbers ---- */
+  .nums{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .nums div{background:var(--panel); padding:18px 16px;}
+  .nums .n{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .nums .l{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;}
+  @media(max-width:620px){ .nums{grid-template-columns:repeat(2,1fr);} }
+
+  /* ---- architecture diagram ---- */
+  .diagram{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:26px 22px 20px;}
+  .flowrow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap;}
+  .node{flex:1 1 0; min-width:120px; background:var(--panel2); border:1px solid var(--border); border-radius:11px;
+    padding:12px 13px; position:relative;}
+  .node .t{font-weight:620; font-size:13.5px;}
+  .node .s{font-family:var(--mono); font-size:11px; color:var(--faint); margin-top:2px; letter-spacing:.02em;}
+  .node.trust{border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 16%,transparent) inset;}
+  .arrow{align-self:center; color:var(--faint); font-family:var(--mono); padding:0 6px; font-size:15px;}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; font-family:var(--mono); font-size:11.5px; color:var(--muted);}
+  .legend span::before{content:"■"; margin-right:6px;}
+  .legend .tcb::before{color:var(--accent);}
+  .legend .ext::before{color:var(--faint);}
+  .caption{font-family:var(--mono); font-size:11.5px; color:var(--faint); margin-top:14px; letter-spacing:.02em; text-align:center;}
+
+  /* ---- ledger (numbered sequence) ---- */
+  .ledger{border-top:1px solid var(--hair);}
+  .entry{display:grid; grid-template-columns:44px 1fr; gap:18px; padding:20px 0; border-bottom:1px solid var(--hair);}
+  .entry .idx{font-family:var(--mono); font-size:13px; color:var(--accent); padding-top:2px; letter-spacing:.02em;}
+  .entry h3{margin-bottom:4px;}
+  .entry p{margin:0; color:var(--muted); font-size:15px;}
+  .entry code, code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2); border:1px solid var(--hair);
+    border-radius:5px; padding:1px 5px; color:var(--ink);}
+  .gate{display:inline-block; font-family:var(--mono); font-size:11px; color:var(--ok); border:1px solid color-mix(in srgb,var(--ok) 40%,var(--border));
+    border-radius:5px; padding:0 6px; margin-right:5px; letter-spacing:.02em;}
+
+  /* ---- decisions register ---- */
+  .reg{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .reg .row{background:var(--panel); padding:18px 20px;}
+  .reg .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:7px; display:inline-block;}
+  .tag.learn{color:var(--learn);}
+  .tag.dec{color:var(--accent);}
+  .reg h3{font-size:15.5px; margin-bottom:5px;}
+  .reg p{margin:0; font-size:14.5px; color:var(--muted);}
+
+  /* ---- "seeing it work": consent card + audit ---- */
+  .show{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media(max-width:720px){ .show{grid-template-columns:1fr;} }
+  .frame{background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; display:flex; flex-direction:column;}
+  .frame .bar{display:flex; align-items:center; gap:7px; padding:9px 13px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--border);}
+  .frame .cap{padding:11px 14px; border-top:1px solid var(--hair); font-size:12.5px; color:var(--muted);}
+
+  /* consent recreation */
+  .consent{padding:22px 20px; background:linear-gradient(180deg,var(--panel2),var(--panel));}
+  .consent .wm{font-weight:600; letter-spacing:.44em; font-size:11px; text-align:center; color:var(--muted); margin-bottom:16px;}
+  .consent h4{margin:0 0 4px; font-size:15px;}
+  .consent .cs{font-size:12.5px; color:var(--muted); margin:0 0 14px; line-height:1.45;}
+  .kv{display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--hair); font-size:13px;}
+  .kv .kk{color:var(--faint);} .kv .vv{font-weight:600;}
+  .scopes{display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end;}
+  .sc{font-family:var(--mono); font-size:10.5px; background:var(--accent-soft); border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border)); color:var(--accent); border-radius:5px; padding:1px 6px;}
+  .btns{display:flex; gap:8px; margin-top:16px;}
+  .btns b{flex:1; text-align:center; border-radius:8px; padding:8px 0; font-size:12.5px; font-weight:600;}
+  .btns .allow{background:var(--accent); color:#fff;}
+  .btns .deny{border:1px solid var(--border); color:var(--muted);}
+
+  /* audit stream */
+  .stream{padding:6px 0; font-family:var(--mono); font-size:11px; line-height:1.5; overflow-x:auto;}
+  .stream .ln{padding:6px 14px; border-bottom:1px solid var(--hair); white-space:nowrap;}
+  .stream .ln:last-child{border-bottom:0;}
+  .stream .tag2{background:color-mix(in srgb,var(--learn) 22%,transparent); color:var(--learn); border-radius:3px; padding:0 4px;}
+  .stream .iss{color:var(--ok);} .stream .den{color:var(--bad);} .stream .dim{color:var(--faint);} .stream .id{color:var(--accent);}
+
+  /* verify list */
+  .checks{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+  .checks li{display:grid; grid-template-columns:20px 1fr; gap:12px; font-size:15px; color:var(--muted);}
+  .checks .ck{color:var(--ok); font-weight:700;}
+  .checks b{color:var(--ink); font-weight:600;}
+
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 18px; color:var(--muted); font-size:15px;}
+  .callout b{color:var(--ink);}
+
+  footer{border-top:1px solid var(--hair); padding:34px 0 60px; color:var(--faint); font-size:13px;}
+  .nextlink{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--hair); margin-bottom:22px; flex-wrap:wrap;}
+  .nextlink .lab{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+  .nextlink a{font-size:19px; font-weight:600;}
+  .paths{font-family:var(--mono); font-size:12px; color:var(--faint); line-height:1.8;}
+  .term{background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;}
+  .term .bar{padding:9px 14px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .term pre{margin:0; padding:15px 17px; font-family:var(--mono); font-size:12.5px; line-height:1.8; color:var(--ink); overflow-x:auto; white-space:pre;}
+  .term .p{color:var(--accent);} .term .c{color:var(--faint);} .term .o{color:var(--muted);}
+</style>
+
+<div class="rail"><div class="wrap">
+  <a class="mark" href="https://claude.ai/code/artifact/018424d8-e57b-426a-998d-b1bcdde983c6" style="text-decoration:none">PROKURA</a>
+  <div class="steps"><a class="done" href="https://claude.ai/code/artifact/018424d8-e57b-426a-998d-b1bcdde983c6" style="text-decoration:none">M0</a><i>·</i><span class="done">M1</span><i>·</i><span class="cur">M2</span><i>·</i><span>M3</span><i>·</i><span>M4</span></div>
+</div></div>
+
+<div class="wrap">
+
+  <header class="hero">
+    <p class="eyebrow">Milestone 02 · Build log</p>
+    <h1>The Token Broker</h1>
+    <p class="thesis">An agent can now hold a <b>real third-party token</b> for a person — but only after that person has <b>linked the provider</b> and <b>consented to that specific agent</b>. The broker owns the lease, the scope-down, and the audit trail. Nothing else can hand out a credential.</p>
+    <div class="meta">
+      <span class="chip status">Shipped · 2026-08-07</span>
+      <span class="chip">grant-acquisition</span>
+      <span class="chip">token-brokering</span>
+      <span class="chip">per-agent-consent</span>
+    </div>
+  </header>
+
+  <hr>
+
+  <section>
+    <p class="lead">Prokura is an open-source reference implementation of <b>agentic identity</b> — the plumbing that lets an AI agent act on your behalf without ever holding your passwords or your provider refresh tokens. It is assembled from Keycloak, OpenFGA, and OpenBao. ("Prokura" is the civil-law term for a registered power of attorney.)</p>
+    <p class="lead">M0 stood up the stack. M1 taught agents to <a href="https://claude.ai/code/artifact/d88a8e36-120b-435d-80d0-6863a6009d29">exchange</a> a user's login for a delegated token. <b>M2 is the heavy one:</b> it turns that delegated token into an actual, short-lived GitHub/Google-style token — through a broker that is the single, auditable choke-point for every third-party credential.</p>
+  </section>
+
+  <section>
+    <p class="kicker">By the numbers</p>
+    <div class="nums">
+      <div><div class="n">34</div><div class="l">integration tests, all green against the live stack</div></div>
+      <div><div class="n">≤900s</div><div class="l">hard cap on every token the broker hands out</div></div>
+      <div><div class="n">0</div><div class="l">refresh tokens ever leaked to an agent or a log</div></div>
+      <div><div class="n">1st</div><div class="l">instrumented Python service — sets the telemetry pattern</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The shape of it</p>
+    <h2>Who is trusted, and who is kept out</h2>
+    <p class="lead">Five components sit behind the compose network. Three of them form the <b>trusted computing base</b> — they can mint, broker, or gate credentials. The agent is deliberately <b>outside</b> it: the most it can ever present is a token addressed to the broker, for a grant it has been individually consented to use.</p>
+    <div class="diagram">
+      <div class="flowrow">
+        <div class="node"><div class="t">Agent app</div><div class="s">outside the TCB</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">Token Broker</div><div class="s">FastAPI · sole gate</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">OpenFGA</div><div class="s">can_use?</div></div>
+      </div>
+      <div class="flowrow" style="margin-top:12px;">
+        <div class="node trust"><div class="t">Keycloak</div><div class="s">identity + brokering</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">OpenBao</div><div class="s">holds refresh creds</div></div>
+        <div class="arrow">→</div>
+        <div class="node"><div class="t">acme realm</div><div class="s">mock provider</div></div>
+      </div>
+      <div class="legend"><span class="tcb">Trusted computing base</span><span class="ext">Untrusted / mock</span></div>
+      <div class="caption">The broker is the only writer of consent tuples and the only reader of stored credentials.</div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">How it works</p>
+    <h2>From a login to a scoped provider token</h2>
+    <p class="lead">Three ceremonies, run once each and then reused. Every step below is enforced in code and covered by a test.</p>
+    <div class="ledger">
+      <div class="entry"><div class="idx">01</div><div>
+        <h3>Link the provider</h3>
+        <p>The user runs Keycloak's <code>kc_action=idp_link:acme</code> flow. Keycloak brokers to the mock <code>acme</code> realm, the user approves, and Keycloak <b>stores the provider's refresh token</b> under their identity. The broker never runs its own OAuth — it consumes what Keycloak brokered.</p>
+      </div></div>
+      <div class="entry"><div class="idx">02</div><div>
+        <h3>Import the grant</h3>
+        <p>The broker retrieves the stored credential and moves it into <b>OpenBao</b> at <code>secret/grants/{user}/{provider}</code>. From that moment the long-lived credential exists <b>only</b> in the vault — never in a response, a log, or the broker's database.</p>
+      </div></div>
+      <div class="entry"><div class="idx">03</div><div>
+        <h3>Consent to one agent</h3>
+        <p>On an authenticated screen the user approves a <b>specific agent</b> for that grant. Approval writes exactly one OpenFGA tuple: <code>agent can_use grant</code>. The broker is the <b>sole writer</b> and refuses any write where the agent's operator isn't the grant's owner.</p>
+      </div></div>
+      <div class="entry"><div class="idx">04</div><div>
+        <h3>Hand out a token</h3>
+        <p>The agent presents a broker-audience token and asks for a provider token. The broker runs the chain in order —
+        <span class="gate">1 signature</span><span class="gate">2 aud=token-broker</span><span class="gate">3 scope ⊆ grant</span><span class="gate">4 can_use</span>
+        — then refreshes against the provider and returns an access token capped at 900 seconds. Any failure is a <code>403</code> before the provider is ever contacted. The refresh token stays in the vault.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Decisions &amp; what we learned</p>
+    <h2>The spike earned its keep</h2>
+    <p class="lead">M2 opened with a throwaway spike proving the linking flow end-to-end before a line of the broker was written. It surfaced a stack of non-obvious Keycloak behaviour — each one is now baked into the committed realm so the whole thing rebuilds from a clean <code class="k">docker compose down -v &amp;&amp; up</code>.</p>
+    <div class="reg">
+      <div class="row"><span class="tag dec">Decision</span><h3>The mock provider is a whole Keycloak realm, not a stub</h3><p>A second realm, <code class="k">acme</code>, stands in for GitHub/Google. It exercises the <i>real</i> brokering and stored-token machinery with zero external credentials — so wiring a real provider later is a config swap, not a rewrite.</p></div>
+      <div class="row"><span class="tag learn">Learned</span><h3>Account-linking is refused unless three conditions are met</h3><p>Keycloak's <code class="k">idp_link</code> returns <code class="k">not_allowed</code> unless the user holds <code class="k">manage-account</code>, the request forces a fresh login with <code class="k">prompt=login</code>, and a Keycloak-26 "do you want to link?" confirmation is accepted. None of that is in the docs' happy path.</p></div>
+      <div class="row"><span class="tag learn">Learned</span><h3>The read-token role is <i>not</i> auto-granted for existing users</h3><p><code class="k">addReadTokenRoleOnCreate</code> only fires when a brokered user is <i>created</i>. Linking to a pre-existing account skips it — so the role, plus a custom client-role mapper (this realm had dropped Keycloak's built-in <code class="k">roles</code> scope), had to be added explicitly.</p></div>
+      <div class="row"><span class="tag learn">Learned</span><h3>Browser and back-channel URLs must be split</h3><p>Keycloak listens on <code class="k">keycloak:8080</code> inside the network but is pinned to <code class="k">localhost:8180</code> for issuers. Realm-to-realm brokering only works when the identity provider's <i>authorization</i> URL uses the browser host and its <i>token/JWKS</i> URLs use the back-channel host.</p></div>
+      <div class="row"><span class="tag dec">Decision</span><h3>The broker re-exchanges the token itself — agents never get read-token</h3><p>Giving the agent the credential-read capability would let it bypass the whole broker. Instead the broker performs its own RFC 8693 exchange as the confidential <code class="k">token-broker</code> client to obtain read-token, keeping that power inside the trust boundary.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Seeing it work</p>
+    <h2>The consent gate and the live audit trail</h2>
+    <p class="lead">Two surfaces make the guarantees legible. On the left, the screen a user actually approves. On the right, the broker's realtime audit — every issuance and denial, each carrying a correlation id that joins the database record to the distributed trace. Both are recreated here from the real running system.</p>
+    <div class="show">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">:8110/consent</span></div>
+        <div class="consent">
+          <div class="wm">PROKURA</div>
+          <h4>Authorize an agent</h4>
+          <p class="cs">An agent is requesting to act on your behalf using a third-party grant you have linked. Consent applies to <b style="color:var(--ink)">this agent only</b>.</p>
+          <div class="kv"><span class="kk">Agent</span><span class="vv">agent-app</span></div>
+          <div class="kv"><span class="kk">Provider grant</span><span class="vv">acme</span></div>
+          <div class="kv"><span class="kk">Scopes</span><span class="scopes"><span class="sc">openid</span><span class="sc">email</span><span class="sc">profile</span></span></div>
+          <div class="btns"><b class="deny">Deny</b><b class="allow">Allow</b></div>
+        </div>
+        <div class="cap">Approving writes a single <code>can_use</code> tuple. The broker rejects any write whose operator isn't the grant owner.</div>
+      </div>
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">Grafana · Token Broker audit</span></div>
+        <div class="stream">
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">broker_audit</span> <span class="id">id=74a6…97a4</span> <span class="iss">issued</span> user=alice agent=agent-app provider=acme ttl=<b>900</b></div>
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">broker_audit</span> <span class="id">id=8da0…4874</span> <span class="den">denied_scope</span> user=alice scopes=repo:write</div>
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">broker_audit</span> <span class="id">id=606f…ba71</span> consent_granted user=alice agent=agent-app</div>
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">broker_audit</span> <span class="id">id=834f…32f3</span> <span class="den">consent_refused</span> evil-agent operated by 'mallory' ≠ owner 'alice'</div>
+          <div class="ln"><span class="dim">08:15</span> <span class="tag2">broker_audit</span> <span class="id">id=2f47…fec5</span> <span class="den">denied_audience</span> aud=[] ≠ token-broker</div>
+        </div>
+        <div class="cap">Real log lines. The <code>id</code> is the trace id — queryable in Loki and stored in Postgres, so audit joins to the flow.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Verified by looking, not by trusting</p>
+    <h2>What we confirmed</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>The <b>consent screen renders</b> and writes exactly one tuple — checked in a real browser.</span></li>
+      <li><span class="ck">✓</span><span>The <b>audit correlation id joins</b> Loki and Postgres — the same id (<code class="k">9a7a2a14…</code>) found in both sinks.</span></li>
+      <li><span class="ck">✓</span><span>The <b>Grafana dashboard</b> shows live broker activity — token exchanges, refreshes, and the audit stream, confirmed on screen.</span></li>
+      <li><span class="ck">✓</span><span><b>No refresh credential</b> appears in any response or log, on success or error paths.</span></li>
+      <li><span class="ck">✓</span><span><b>Fire-and-forget telemetry:</b> stop the observability stack and the broker keeps handing out tokens; the suite stays green.</span></li>
+      <li><span class="ck">✓</span><span>The whole milestone <b>rebuilds from scratch</b> — clean <code class="k">down -v &amp;&amp; up</code>, re-link, 34 tests green.</span></li>
+    </ul>
+    <p style="margin-top:22px"></p>
+    <div class="callout"><b>What's next.</b> M3 adds human-in-the-loop approval (CIBA) for high-risk actions, joining the approval service to the trusted computing base. M4 is the headline: Keycloak as an MCP authorization server, driving the whole chain from a real MCP client.</div>
+  </section>
+
+  <section>
+    <p class="kicker">Run it yourself</p>
+    <h2>Link a provider, consent, and broker a token</h2>
+    <p class="lead">Three test files walk the whole flow: linking the mock <code>acme</code> provider, importing the grant, consenting one agent, and handing out a scoped token — then you watch it land in the live dashboard.</p>
+    <div class="term">
+      <div class="bar">your shell · repo root · stack up, venv active (see M0 / M1)</div>
+<pre><span class="p">$</span> docker compose up -d
+
+<span class="c"># links acme, imports the grant, consents, brokers a scoped token</span>
+<span class="p">$</span> pytest tests/smoke/test_grant_acquisition.py \
+         tests/smoke/test_consent.py \
+         tests/smoke/test_token_brokering.py -v
+
+<span class="c"># or drive the account-linking ceremony by hand</span>
+<span class="p">$</span> python spike/idp-link/link_spike.py
+
+<span class="c"># watch it live — issued-token count + the realtime audit stream</span>
+<span class="p">$</span> open http://localhost:3001/d/prokura-delegation</pre>
+    </div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Previous milestone</div><a href="https://claude.ai/code/artifact/d88a8e36-120b-435d-80d0-6863a6009d29">← M1 · Delegated Token Exchange</a></div>
+      <div style="text-align:right"><div class="lab">Status</div><span style="color:var(--ok)">Shipped &amp; archived</span></div>
+    </div>
+    <div class="paths">
+      services/token-broker/ &nbsp;·&nbsp; 12 modules, FastAPI<br>
+      deploy/keycloak/{realm-export,acme-realm}.json &nbsp;·&nbsp; the brokering config<br>
+      tests/smoke/test_{grant_acquisition,consent,token_brokering,broker_audit}.py<br>
+      openspec/changes/archive/2026-08-07-add-token-broker/ &nbsp;·&nbsp; proposal · design · specs · tasks
+    </div>
+  </footer>
+</div>
+
+<script>
+  // honor the viewer's theme toggle (host stamps data-theme); nothing else needed.
+  (function(){ try{ var m=matchMedia('(prefers-color-scheme: dark)'); }catch(e){} })();
+</script>

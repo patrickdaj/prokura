@@ -1,0 +1,290 @@
+<title>Prokura — M1: Delegated Token Exchange</title>
+<style>
+  :root{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+      --ink:#10151c; --muted:#566372; --faint:#8794a2;
+      --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+  }
+  :root[data-theme="light"]{
+    --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+    --ink:#10151c; --muted:#566372; --faint:#8794a2;
+    --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16.5px; line-height:1.62;
+    background-image:radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 62%);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  a{color:var(--accent); text-decoration:none;} a:hover{text-decoration:underline;}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+  .rail{border-bottom:1px solid var(--hair); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter:blur(8px);}
+  .rail .wrap{display:flex; align-items:center; justify-content:space-between; height:56px;}
+  .mark{font-weight:600; letter-spacing:.42em; font-size:13px; color:var(--ink);}
+  .steps{display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;}
+  .steps span{color:var(--faint);} .steps .cur{color:var(--accent);} .steps .done{color:var(--muted);} .steps i{color:var(--faint); font-style:normal;}
+  .hero{padding:70px 0 34px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 18px;}
+  h1{font-size:clamp(34px,6vw,52px); line-height:1.04; letter-spacing:-.02em; font-weight:640; margin:0 0 20px; text-wrap:balance;}
+  .thesis{font-size:20px; line-height:1.5; color:var(--muted); margin:0; max-width:64ch; text-wrap:pretty;}
+  .thesis b{color:var(--ink); font-weight:600;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px; font-family:var(--mono); font-size:12px;}
+  .chip{border:1px solid var(--border); border-radius:999px; padding:4px 11px; color:var(--muted); letter-spacing:.03em;}
+  .chip.status{border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); color:var(--ok);}
+  .chip.status::before{content:"●"; margin-right:6px; font-size:9px; vertical-align:1px;}
+  section{padding:34px 0;}
+  .kicker{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 6px;}
+  h2{font-size:26px; letter-spacing:-.01em; font-weight:620; margin:0 0 16px; text-wrap:balance;}
+  h3{font-size:16px; margin:0 0 6px; font-weight:620;}
+  p{margin:0 0 15px;} .lead{color:var(--muted);}
+  hr{border:0; border-top:1px solid var(--hair); margin:0;}
+  .nums{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .nums div{background:var(--panel); padding:18px 16px;}
+  .nums .n{font-family:var(--mono); font-size:24px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .nums .l{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;}
+  @media(max-width:620px){ .nums{grid-template-columns:repeat(2,1fr);} }
+  .diagram{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:26px 22px 20px;}
+  .flowrow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap;}
+  .node{flex:1 1 0; min-width:120px; background:var(--panel2); border:1px solid var(--border); border-radius:11px; padding:12px 13px;}
+  .node .t{font-weight:620; font-size:13.5px;} .node .s{font-family:var(--mono); font-size:11px; color:var(--faint); margin-top:2px;}
+  .node.trust{border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 16%,transparent) inset;}
+  .arrow{align-self:center; color:var(--faint); font-family:var(--mono); padding:0 6px; font-size:15px;}
+  .caption{font-family:var(--mono); font-size:11.5px; color:var(--faint); margin-top:14px; letter-spacing:.02em; text-align:center;}
+  .ledger{border-top:1px solid var(--hair);}
+  .entry{display:grid; grid-template-columns:44px 1fr; gap:18px; padding:20px 0; border-bottom:1px solid var(--hair);}
+  .entry .idx{font-family:var(--mono); font-size:13px; color:var(--accent); padding-top:2px;}
+  .entry h3{margin-bottom:4px;} .entry p{margin:0; color:var(--muted); font-size:15px;}
+  code,code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2); border:1px solid var(--hair); border-radius:5px; padding:1px 5px; color:var(--ink);}
+  .reg{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .reg .row{background:var(--panel); padding:18px 20px;}
+  .reg .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:7px; display:inline-block;}
+  .tag.dec{color:var(--accent);} .tag.learn{color:var(--learn);}
+  .reg h3{font-size:15.5px; margin-bottom:5px;} .reg p{margin:0; font-size:14.5px; color:var(--muted);}
+  .codeblk{background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow-x:auto;}
+  .codeblk .bar{padding:9px 14px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .codeblk pre{margin:0; padding:16px 18px; font-family:var(--mono); font-size:12.5px; line-height:1.7; color:var(--ink); white-space:pre;}
+  .codeblk .kw{color:var(--accent);} .codeblk .st{color:var(--ok);} .codeblk .cm{color:var(--faint);}
+  .show{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media(max-width:720px){ .show{grid-template-columns:1fr;} }
+  .frame{background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; display:flex; flex-direction:column;}
+  .frame .bar{display:flex; align-items:center; gap:7px; padding:9px 13px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--border);}
+  .frame .cap{padding:11px 14px; border-top:1px solid var(--hair); font-size:12.5px; color:var(--muted);}
+  .jwt{padding:16px 16px; font-family:var(--mono); font-size:12.5px; line-height:1.85; overflow-x:auto;}
+  .jwt .k{color:var(--faint);} .jwt .v{color:var(--ink);} .jwt .hl{color:var(--accent); font-weight:600;} .jwt .ok{color:var(--ok);}
+  .deny{padding:16px 16px; font-family:var(--mono); font-size:12.5px; line-height:1.8;}
+  .deny .bad{color:var(--bad);} .deny .dim{color:var(--faint);}
+  .checks{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+  .checks li{display:grid; grid-template-columns:20px 1fr; gap:12px; font-size:15px; color:var(--muted);}
+  .checks .ck{color:var(--ok); font-weight:700;} .checks b{color:var(--ink); font-weight:600;}
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 18px; color:var(--muted); font-size:15px;}
+  .callout b{color:var(--ink);}
+  footer{border-top:1px solid var(--hair); padding:34px 0 60px; color:var(--faint); font-size:13px;}
+  .nextlink{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--hair); margin-bottom:22px; flex-wrap:wrap;}
+  .nextlink .lab{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+  .nextlink a{font-size:19px; font-weight:600;}
+  .paths{font-family:var(--mono); font-size:12px; color:var(--faint); line-height:1.8;}
+  .term{background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;}
+  .term .bar{padding:9px 14px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .term pre{margin:0; padding:15px 17px; font-family:var(--mono); font-size:12.5px; line-height:1.8; color:var(--ink); overflow-x:auto; white-space:pre;}
+  .term .p{color:var(--accent);} .term .c{color:var(--faint);} .term .o{color:var(--muted);}
+</style>
+
+<div class="rail"><div class="wrap">
+  <a class="mark" href="https://claude.ai/code/artifact/018424d8-e57b-426a-998d-b1bcdde983c6" style="text-decoration:none">PROKURA</a>
+  <div class="steps"><a class="done" href="https://claude.ai/code/artifact/018424d8-e57b-426a-998d-b1bcdde983c6" style="text-decoration:none">M0</a><i>·</i><span class="cur">M1</span><i>·</i><span>M2</span><i>·</i><span>M3</span><i>·</i><span>M4</span></div>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Milestone 01 · Build log</p>
+    <h1>Delegated Token Exchange</h1>
+    <p class="thesis">An agent turns your login into a <b>delegated token</b> — one that still says the action is <b>you</b>, records <b>which agent</b> is acting, carries <b>only the scopes it asked for</b>, and is addressed to <b>exactly one recipient</b>. This is the foundation every later milestone stands on.</p>
+    <div class="meta">
+      <span class="chip status">Shipped · 2026-08-07</span>
+      <span class="chip">identity-delegation</span>
+      <span class="chip">agent-sdk</span>
+      <span class="chip">RFC 8693</span>
+    </div>
+  </header>
+
+  <hr>
+
+  <section>
+    <p class="lead">Prokura is an open-source reference implementation of <b>agentic identity</b> — how an AI agent acts for you without ever holding your passwords. It is built from Keycloak, OpenFGA, and OpenBao. ("Prokura" is the civil-law term for a registered power of attorney.)</p>
+    <p class="lead">M0 stood up the stack and proved login works. <b>M1 makes delegation real.</b> When an agent needs to call something on your behalf, it doesn't reuse your login token — it <i>exchanges</i> it for a new one that is honest about who is really acting, and for whom.</p>
+  </section>
+
+  <section>
+    <p class="kicker">By the numbers</p>
+    <div class="nums">
+      <div><div class="n">RFC 8693</div><div class="l">the standard token-exchange grant, not a bespoke flow</div></div>
+      <div><div class="n">2</div><div class="l">audiences: the tools API and the token broker</div></div>
+      <div><div class="n">0</div><div class="l">wildcard exchanges — permission is per client, per audience</div></div>
+      <div><div class="n">sub≠azp</div><div class="l">every token records the user <i>and</i> the acting agent</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The shape of it</p>
+    <h2>One user token becomes many honest tokens</h2>
+    <p class="lead">The agent never sends your original login onward. It exchanges it — once per recipient — for a downscoped token addressed to that recipient alone. A token minted for the tools API cannot be replayed at the broker, and vice versa.</p>
+    <div class="diagram">
+      <div class="flowrow">
+        <div class="node"><div class="t">User login</div><div class="s">sub = alice</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">agent-app</div><div class="s">exchange()</div></div>
+        <div class="arrow">→</div>
+        <div class="node"><div class="t">aud: token-broker</div><div class="s">for M2</div></div>
+      </div>
+      <div class="flowrow" style="margin-top:12px;">
+        <div class="node" style="visibility:hidden"></div>
+        <div class="arrow" style="visibility:hidden">→</div>
+        <div class="node" style="visibility:hidden"></div>
+        <div class="arrow">↘</div>
+        <div class="node"><div class="t">aud: agent-tools-api</div><div class="s">for tool calls</div></div>
+      </div>
+      <div class="caption">Two explicit exchanges — never one multi-audience token. Each token is honest about its addressee.</div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">How it works</p>
+    <h2>The exchange, step by step</h2>
+    <div class="ledger">
+      <div class="entry"><div class="idx">01</div><div>
+        <h3>The agent holds a user token</h3>
+        <p>The user logs into the confidential <code>agent-app</code> client. The agent now has a normal access token — <code>sub=alice</code> — but must not present it onward as if it <i>were</i> the user.</p>
+      </div></div>
+      <div class="entry"><div class="idx">02</div><div>
+        <h3>Exchange for a specific audience</h3>
+        <p>The SDK calls Keycloak's <code>token-exchange</code> grant with a single target audience. Keycloak checks an explicit per-client, per-audience permission — <b>no wildcards</b> — and mints a new token.</p>
+      </div></div>
+      <div class="entry"><div class="idx">03</div><div>
+        <h3>The new token is attributable and downscoped</h3>
+        <p>It keeps <code>sub=alice</code> (the action is still the user's), adds <code>azp=agent-app</code> (this agent is acting), carries <b>only the requested scopes</b>, and names the target in <code>aud</code>. Nothing is written to disk or logged.</p>
+      </div></div>
+      <div class="entry"><div class="idx">04</div><div>
+        <h3>The audience defense (F2-A)</h3>
+        <p>A token addressed to the tools API is worthless at the broker. In M2 the broker rejects anything whose <code>aud</code> isn't <code>token-broker</code> — a defense this milestone sets up and proves.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The API</p>
+    <h2>What an agent actually writes</h2>
+    <p class="lead">The whole surface is one function. It is thin on purpose — <code>httpx</code> plus the standard library, no token cache, no secrets embedded.</p>
+    <div class="codeblk">
+      <div class="bar">prokura-py · exchange()</div>
+      <pre><span class="cm"># turn the user's login into a token addressed to the broker</span>
+broker_token = <span class="kw">exchange</span>(
+    user_token,
+    audience=<span class="st">"token-broker"</span>,   <span class="cm"># F2-A: one recipient</span>
+    base_url=KEYCLOAK, realm=<span class="st">"prokura"</span>,
+    client_id=<span class="st">"agent-app"</span>, client_secret=SECRET,
+)
+<span class="cm"># broker_token: sub=alice, azp=agent-app, aud=[token-broker]</span></pre>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Seeing it work</p>
+    <h2>An honest token, and a refused one</h2>
+    <p class="lead">On the left, the claims of a delegated token — decoded. On the right, what happens when an agent asks for an audience it was never permitted: a clear, catchable error, not a token.</p>
+    <div class="show">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">decoded delegated token</span></div>
+        <div class="jwt">
+<span class="k">"sub"</span>:  <span class="hl">"alice"</span>        <span class="k">// still the user</span>
+<span class="k">"azp"</span>:  <span class="hl">"agent-app"</span>    <span class="k">// the acting agent</span>
+<span class="k">"aud"</span>:  [<span class="v">"token-broker"</span>] <span class="k">// one recipient</span>
+<span class="k">"scope"</span>: <span class="v">"broker-audience"</span>
+<span class="k">"exp"</span>:  <span class="v">+900s</span>          <span class="ok">// ≤ 15 min, enforced</span>
+        </div>
+        <div class="cap">Attributable to <b style="color:var(--ink)">user-via-agent</b> — the core of delegated identity.</div>
+      </div>
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">un-permitted audience</span></div>
+        <div class="deny">
+<span class="dim">&gt;&gt;&gt;</span> exchange(tok, audience=<span style="color:var(--ink)">"nonexistent-api"</span>)
+
+<span class="bad">ExchangeDenied</span>: exchange denied for
+  audience 'nonexistent-api'
+<span class="dim"># no token returned — a distinct,</span>
+<span class="dim"># catchable error naming the audience</span>
+        </div>
+        <div class="cap">Permission is explicit per (client, audience). The denial is a first-class SDK error.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Decisions</p>
+    <h2>Why it's built this way</h2>
+    <div class="reg">
+      <div class="row"><span class="tag dec">Decision</span><h3>Standard token exchange, not the legacy path</h3><p>Keycloak 26's supported <code class="k">urn:…:token-exchange</code> grant, verified against the pinned image rather than from memory — M0 taught us that config flags churn between versions.</p></div>
+      <div class="row"><span class="tag dec">Decision</span><h3>Two explicit exchanges, never one multi-audience token</h3><p>Each token stays honest about its single addressee. It's what lets the broker (M2) safely reject anything not addressed to it.</p></div>
+      <div class="row"><span class="tag dec">Decision</span><h3>The SDK never persists a token</h3><p>Tokens are in-memory, short-lived values. Nothing is written to disk, logs, or any cache that outlives the process — asserted by a test on every path.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Verified by looking</p>
+    <h2>What we confirmed</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>Exchanged tokens carry <b>sub=user, azp=agent</b> and <b>only the requested scopes</b> — decoded and asserted.</span></li>
+      <li><span class="ck">✓</span><span>An <b>un-permitted audience raises <code class="k">ExchangeDenied</code></b>, naming the audience — no token leaks out.</span></li>
+      <li><span class="ck">✓</span><span>The <b>broker-audience token is accepted</b> where a plain user token is refused (the F2-A defense).</span></li>
+      <li><span class="ck">✓</span><span>The delegated exchange appears as a <b>linked, cross-service trace</b> in the console.</span></li>
+    </ul>
+    <p style="margin-top:22px"></p>
+    <div class="callout"><b>What this unlocks.</b> The broker-audience token minted here is exactly what M2 consumes: an agent presents it, and — if the user has linked the provider and consented to that agent — receives a scoped, short-lived third-party token in return.</div>
+  </section>
+
+  <section>
+    <p class="kicker">Run it yourself</p>
+    <h2>Watch a login become a delegated token</h2>
+    <p class="lead">The integration test drives the whole thing — a real browser-style login, then the exchange — and decodes the claims to prove them.</p>
+    <div class="term">
+      <div class="bar">your shell · repo root</div>
+<pre><span class="c"># the stack must be up (see M0):  docker compose up -d</span>
+<span class="p">$</span> python -m venv .venv &amp;&amp; source .venv/bin/activate
+<span class="p">$</span> pip install -r tests/smoke/requirements.txt
+
+<span class="c"># drives login → exchange; asserts sub=user, azp=agent, scoped aud</span>
+<span class="p">$</span> pytest tests/smoke/test_exchange.py -v</pre>
+    </div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Next milestone</div><a href="https://claude.ai/code/artifact/0e6c95bf-c7b3-4637-bcaf-26292a3aea2b">M2 · The Token Broker →</a></div>
+      <div style="text-align:right"><div class="lab">Status</div><span style="color:var(--ok)">Shipped &amp; archived</span></div>
+    </div>
+    <div class="paths">
+      sdk/prokura-py/prokura/exchange.py &nbsp;·&nbsp; the exchange() helper<br>
+      deploy/keycloak/realm-export.json &nbsp;·&nbsp; per-(client, audience) exchange permissions<br>
+      tests/smoke/test_exchange.py &nbsp;·&nbsp; claims, scope-down, audience denial<br>
+      openspec/changes/archive/2026-08-07-add-token-exchange/ &nbsp;·&nbsp; proposal · design · specs · tasks
+    </div>
+  </footer>
+</div>

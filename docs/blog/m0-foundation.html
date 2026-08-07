@@ -1,0 +1,237 @@
+<title>Prokura — The Foundation &amp; the Roadmap</title>
+<style>
+  :root{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+      --ink:#10151c; --muted:#566372; --faint:#8794a2;
+      --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+  }
+  :root[data-theme="light"]{
+    --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+    --ink:#10151c; --muted:#566372; --faint:#8794a2;
+    --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+  }
+  *{box-sizing:border-box;} html{-webkit-text-size-adjust:100%;}
+  body{margin:0; background:var(--ground); color:var(--ink); font-family:var(--sans); font-size:16.5px; line-height:1.62;
+    background-image:radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 62%);}
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  a{color:var(--accent); text-decoration:none;} a:hover{text-decoration:underline;}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+  .rail{border-bottom:1px solid var(--hair); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter:blur(8px);}
+  .rail .wrap{display:flex; align-items:center; justify-content:space-between; height:56px;}
+  .mark{font-weight:600; letter-spacing:.42em; font-size:13px; color:var(--ink);}
+  .steps{display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;}
+  .steps span{color:var(--faint);} .steps .cur{color:var(--accent);} .steps .done{color:var(--muted);} .steps i{color:var(--faint); font-style:normal;}
+  .hero{padding:70px 0 34px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 18px;}
+  h1{font-size:clamp(34px,6vw,52px); line-height:1.04; letter-spacing:-.02em; font-weight:640; margin:0 0 20px; text-wrap:balance;}
+  .thesis{font-size:20px; line-height:1.5; color:var(--muted); margin:0; max-width:64ch; text-wrap:pretty;}
+  .thesis b{color:var(--ink); font-weight:600;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px; font-family:var(--mono); font-size:12px;}
+  .chip{border:1px solid var(--border); border-radius:999px; padding:4px 11px; color:var(--muted); letter-spacing:.03em;}
+  .chip.status{border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); color:var(--ok);}
+  .chip.status::before{content:"●"; margin-right:6px; font-size:9px; vertical-align:1px;}
+  section{padding:34px 0;}
+  .kicker{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 6px;}
+  h2{font-size:26px; letter-spacing:-.01em; font-weight:620; margin:0 0 16px; text-wrap:balance;}
+  h3{font-size:16px; margin:0 0 6px; font-weight:620;}
+  p{margin:0 0 15px;} .lead{color:var(--muted);}
+  hr{border:0; border-top:1px solid var(--hair); margin:0;}
+  code,code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2); border:1px solid var(--hair); border-radius:5px; padding:1px 5px; color:var(--ink);}
+
+  /* stack diagram */
+  .stack{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:24px 22px 18px;}
+  .layer{margin-bottom:14px;} .layer:last-child{margin-bottom:0;}
+  .layer .lh{font-family:var(--mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint); margin-bottom:8px;}
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  @media(max-width:560px){ .grid{grid-template-columns:repeat(2,1fr);} }
+  .box{background:var(--panel2); border:1px solid var(--border); border-radius:9px; padding:10px 12px;}
+  .box .t{font-weight:620; font-size:13px;} .box .s{font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-top:1px;}
+  .box.trust{border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 14%,transparent) inset;}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-family:var(--mono); font-size:11.5px; color:var(--muted);}
+  .legend span::before{content:"■"; margin-right:6px;} .legend .tcb::before{color:var(--accent);} .legend .ext::before{color:var(--faint);}
+
+  /* ledger */
+  .ledger{border-top:1px solid var(--hair);}
+  .entry{display:grid; grid-template-columns:44px 1fr; gap:18px; padding:20px 0; border-bottom:1px solid var(--hair);}
+  .entry .idx{font-family:var(--mono); font-size:13px; color:var(--accent); padding-top:2px;}
+  .entry h3{margin-bottom:4px;} .entry p{margin:0; color:var(--muted); font-size:15px;}
+
+  /* roadmap */
+  .road{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .stop{background:var(--panel); padding:16px 18px; display:grid; grid-template-columns:52px 1fr auto; gap:14px; align-items:center;}
+  .stop .m{font-family:var(--mono); font-size:12.5px; font-weight:600; color:var(--accent); letter-spacing:.04em;}
+  .stop .b h3{font-size:15.5px; margin:0 0 2px;} .stop .b p{margin:0; font-size:13.5px; color:var(--muted);}
+  .st{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; border-radius:999px; padding:3px 10px; white-space:nowrap;}
+  .st.done{color:var(--ok); border:1px solid color-mix(in srgb,var(--ok) 40%,var(--border));}
+  .st.done::before{content:"●"; margin-right:5px; font-size:8px; vertical-align:1px;}
+  .st.now{color:#fff; background:var(--accent); border:1px solid var(--accent);}
+  .st.plan{color:var(--faint); border:1px solid var(--border);}
+  .stop.current{background:linear-gradient(90deg, var(--accent-soft), var(--panel) 60%);}
+  @media(max-width:560px){ .stop{grid-template-columns:40px 1fr; } .stop .st{grid-column:2; justify-self:start; margin-top:2px;} }
+
+  .checks{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+  .checks li{display:grid; grid-template-columns:20px 1fr; gap:12px; font-size:15px; color:var(--muted);}
+  .checks .ck{color:var(--ok); font-weight:700;} .checks b{color:var(--ink); font-weight:600;}
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 18px; color:var(--muted); font-size:15px;}
+  .callout b{color:var(--ink);}
+  footer{border-top:1px solid var(--hair); padding:34px 0 60px; color:var(--faint); font-size:13px;}
+  .nextlink{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--hair); margin-bottom:22px; flex-wrap:wrap;}
+  .nextlink .lab{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+  .nextlink a{font-size:19px; font-weight:600;}
+  .paths{font-family:var(--mono); font-size:12px; color:var(--faint); line-height:1.8;}
+  .term{background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;}
+  .term .bar{padding:9px 14px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .term pre{margin:0; padding:15px 17px; font-family:var(--mono); font-size:12.5px; line-height:1.8; color:var(--ink); overflow-x:auto; white-space:pre;}
+  .term .p{color:var(--accent);} .term .c{color:var(--faint);} .term .o{color:var(--muted);}
+</style>
+
+<div class="rail"><div class="wrap">
+  <div class="mark">PROKURA</div>
+  <div class="steps"><span class="cur">M0</span><i>·</i><span>M1</span><i>·</i><span>M2</span><i>·</i><span>M3</span><i>·</i><span>M4</span></div>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">The build log · Start here</p>
+    <h1>Agentic identity, assembled from parts you can read</h1>
+    <p class="thesis">Prokura is an open-source <b>reference implementation</b> of the plumbing that lets an AI agent act on your behalf — without ever holding your passwords or your provider tokens. It's an OSS counterpart to "Auth0 for AI agents", built from <b>Keycloak, OpenFGA, and OpenBao</b>. This page is the foundation and the map; each milestone has its own write-up.</p>
+    <div class="meta">
+      <span class="chip status">Foundation shipped</span>
+      <span class="chip">docker-compose</span>
+      <span class="chip">reference + portfolio</span>
+    </div>
+  </header>
+
+  <hr>
+
+  <section>
+    <p class="kicker">The problem</p>
+    <h2>An agent needs to act as you — safely</h2>
+    <p class="lead">When an AI agent books a flight, reads your Drive, or opens a pull request, three questions have to be answerable at all times: <b>is this really you</b> the action is attributed to, <b>which agent</b> is acting, and <b>exactly what</b> is it allowed to do? Hand an agent your GitHub token and all three answers are lost.</p>
+    <p class="lead">Prokura keeps them answerable. The name is the civil-law term for a <b>registered power of attorney</b> — a bounded, revocable, on-the-record authority to act for someone. That is precisely the model: every action is attributable to <i>user-via-agent</i>, gated by explicit per-agent consent, and issued as a short-lived, narrowly-scoped credential the agent never gets to keep.</p>
+    <div class="callout">This is a <b>reference architecture</b>, not a product. It runs entirely on <code>docker-compose</code> and is explicitly non-production — the docs, the decisions, and the demo <i>are</i> the deliverable. Two flows get full rigor: token brokering and human approval.</div>
+  </section>
+
+  <section>
+    <p class="kicker">The foundation M0 laid</p>
+    <h2>The whole stack, standing up on one command</h2>
+    <p class="lead">M0 assembled every moving part behind a single compose file and proved the base was real: OIDC login works, and Keycloak-issued tokens are bound to <b>15 minutes</b>. The trusted core is small and named on purpose.</p>
+    <div class="stack">
+      <div class="layer">
+        <div class="lh">Identity &amp; authority — the trusted core</div>
+        <div class="grid">
+          <div class="box trust"><div class="t">Keycloak</div><div class="s">OIDC · brokering · MCP AS</div></div>
+          <div class="box trust"><div class="t">OpenFGA</div><div class="s">relationship authz</div></div>
+          <div class="box trust"><div class="t">OpenBao</div><div class="s">secret / credential vault</div></div>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lh">Services</div>
+        <div class="grid">
+          <div class="box"><div class="t">Token Broker</div><div class="s">M2 · FastAPI</div></div>
+          <div class="box"><div class="t">Approval</div><div class="s">M3 · planned</div></div>
+          <div class="box"><div class="t">Console</div><div class="s">bespoke dashboard</div></div>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lh">Observability &amp; demo infrastructure</div>
+        <div class="grid">
+          <div class="box"><div class="t">Grafana LGTM</div><div class="s">traces · logs · metrics</div></div>
+          <div class="box"><div class="t">Postgres</div><div class="s">state</div></div>
+          <div class="box"><div class="t">Mailpit · ntfy</div><div class="s">email sink · push</div></div>
+        </div>
+      </div>
+      <div class="legend"><span class="tcb">Trusted computing base</span><span class="ext">Supporting infrastructure</span></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">What M0 proved</p>
+    <h2>Stand it up, then de-risk the hardest thing early</h2>
+    <div class="ledger">
+      <div class="entry"><div class="idx">01</div><div>
+        <h3>The compose skeleton</h3>
+        <p>Keycloak, OpenFGA, OpenBao, Postgres and the observability stack come up together, wired and seeded — one <code>docker compose up</code> and the reference is live.</p>
+      </div></div>
+      <div class="entry"><div class="idx">02</div><div>
+        <h3>Login works and tokens are short</h3>
+        <p>OIDC login is real, and Keycloak-issued access tokens are bound to <b>≤ 15 minutes</b> — the TTL-honesty principle every later milestone inherits.</p>
+      </div></div>
+      <div class="entry"><div class="idx">03</div><div>
+        <h3>The CIBA spike — proving M3 before building M3</h3>
+        <p>Human approval (M3) hinges on a risky bet: can Keycloak's <b>built-in HTTP authentication channel</b> drive out-of-band approval, so we avoid writing and maintaining a Java plugin? M0 spiked it and proved yes. That single experiment de-risked an entire future milestone — the same discipline M2 later reused for account-linking.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Where we are &amp; what's next</p>
+    <h2>The roadmap</h2>
+    <p class="lead">Six milestones, sequenced so risk is retired early and the headline (MCP) lands before the nice-to-have (RAG). Three are shipped; the token broker just landed.</p>
+    <div class="road">
+      <div class="stop"><div class="m">M0</div><div class="b"><h3>Foundation &amp; CIBA spike</h3><p>The stack, OIDC login, the 15-minute bound, and the approval-channel proof.</p></div><span class="st done">Shipped</span></div>
+      <div class="stop"><div class="m">—</div><div class="b"><h3>Observability</h3><p>Born-instrumented: traceparent propagation and correlation IDs as a definition-of-done for every new service.</p></div><span class="st done">Shipped</span></div>
+      <div class="stop"><div class="m">M1</div><div class="b"><h3>Delegated token exchange</h3><p>RFC 8693 — a user's login becomes a token attributable to user-via-agent, addressed to one recipient.</p></div><span class="st done">Shipped</span></div>
+      <div class="stop current"><div class="m">M2</div><div class="b"><h3>The token broker</h3><p>Grant acquisition, per-agent consent, and scoped provider-token hand-out. The heavy one.</p></div><span class="st now">You are here</span></div>
+      <div class="stop"><div class="m">M3</div><div class="b"><h3>Human approval</h3><p>CIBA over the built-in HTTP channel (proven in M0) — structured, single-use approvals for high-risk actions.</p></div><span class="st plan">Planned</span></div>
+      <div class="stop"><div class="m">M4</div><div class="b"><h3>MCP authorization server</h3><p>The headline: Keycloak as an MCP AS, driving the whole chain from a real MCP client.</p></div><span class="st plan">Planned</span></div>
+      <div class="stop"><div class="m">M5</div><div class="b"><h3>RAG authorization</h3><p>A Drive-backed, ACL'd corpus with user-context filtering and an adversarial leakage test.</p></div><span class="st plan">Planned</span></div>
+      <div class="stop"><div class="m">M6</div><div class="b"><h3>Polish</h3><p>Architecture doc, threat model, ADRs, and the demo — the parts that make it a reference others can trust.</p></div><span class="st plan">Planned</span></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Read the milestones</p>
+    <h2>The story so far</h2>
+    <ul class="checks">
+      <li><span class="ck">→</span><span><a href="https://claude.ai/code/artifact/d88a8e36-120b-435d-80d0-6863a6009d29"><b>M1 · Delegated Token Exchange</b></a> — how a login becomes a delegated, single-audience token.</span></li>
+      <li><span class="ck">→</span><span><a href="https://claude.ai/code/artifact/0e6c95bf-c7b3-4637-bcaf-26292a3aea2b"><b>M2 · The Token Broker</b></a> — grants, per-agent consent, and scoped provider tokens.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <p class="kicker">Run it yourself</p>
+    <h2>Bring the whole stack up</h2>
+    <p class="lead">One file, one command. These are the real steps — the same stack the integration suite runs against. Log in as <code>alice / alice</code>.</p>
+    <div class="term">
+      <div class="bar">your shell · from the repo root</div>
+<pre><span class="c"># bring up the entire reference stack</span>
+<span class="p">$</span> docker compose up -d
+<span class="p">$</span> curl -s localhost:9000/health/ready   <span class="o"># Keycloak: {"status":"UP"}</span>
+
+<span class="c"># open the pieces</span>
+<span class="p">$</span> open http://localhost:8095   <span class="o"># bespoke console</span>
+<span class="p">$</span> open http://localhost:8180   <span class="o"># Keycloak  (admin / admin)</span>
+<span class="p">$</span> open http://localhost:3001   <span class="o"># Grafana — traces · logs · metrics</span></pre>
+    </div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Next milestone</div><a href="https://claude.ai/code/artifact/d88a8e36-120b-435d-80d0-6863a6009d29">M1 · Delegated Token Exchange →</a></div>
+      <div style="text-align:right"><div class="lab">Foundation</div><span style="color:var(--ok)">Shipped &amp; archived</span></div>
+    </div>
+    <div class="paths">
+      docker-compose.yml &nbsp;·&nbsp; the whole stack, one file<br>
+      spike/ciba-http-channel/ &nbsp;·&nbsp; the M3-de-risking approval-channel spike<br>
+      openspec/specs/ &nbsp;·&nbsp; 8 capability contracts (identity-delegation, token-brokering, …)<br>
+      openspec/changes/archive/2026-08-06-establish-v02-baseline/ &nbsp;·&nbsp; the M0 change
+    </div>
+  </footer>
+</div>
