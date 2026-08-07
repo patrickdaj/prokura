@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Prokura Walkthrough — Token Brokering (Flow B)</title>
 <link rel="stylesheet" href="walkthrough.css">
 <div class="rail"><div class="wrap">
@@ -37,7 +38,7 @@
       by the broker (the sole writer). Here it is at <code>secret/grants/alice/acme</code> — the values are
       masked by the vault; the agent, and this page, only ever see dots.</p>
     <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8200 — OpenBao · secret/grants/alice/acme</span></div>
-      <div class="body"><img src="img/flowB-openbao.png" alt="OpenBao UI showing the stored grant secret/grants/alice/acme with masked credential, kind, scopes"></div>
+      <div class="body"><a href="img/flowB-openbao.png" target="_blank" rel="noopener"><img src="img/flowB-openbao.png" alt="OpenBao UI showing the stored grant secret/grants/alice/acme with masked credential, kind, scopes"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> the refresh credential is sealed in OpenBao (<code>kind: refresh_token</code>), scoped to the broker's policy — not in the agent, not in a token, not on this page.</div>
   </div></div></section>

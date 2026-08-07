@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Prokura Walkthrough — Human Approval (Flow C)</title>
 <link rel="stylesheet" href="walkthrough.css">
 <div class="rail"><div class="wrap">
@@ -35,7 +36,7 @@
       <b>rendered by the approval service from stored data</b> — the agent cannot influence what the human
       sees. Alice reads the real <code>to</code>/<code>subject</code>/<code>body</code> and clicks Approve.</p>
     <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8120 — trusted approval UI</span></div>
-      <div class="body"><img src="img/flowC-approval.png" alt="Trusted approval UI showing agent mcp-server, action email.send, and the server-stored to/subject/body with Approve/Deny"></div>
+      <div class="body"><a href="img/flowC-approval.png" target="_blank" rel="noopener"><img src="img/flowC-approval.png" alt="Trusted approval UI showing agent mcp-server, action email.send, and the server-stored to/subject/body with Approve/Deny"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> the human approves <i>the action the server holds</i> — not agent-supplied text — closing the substitution gap.</div>
   </div></div></section>
@@ -45,7 +46,7 @@
     <p>With approval, the retry presents a single-use token; the tool verifies it against the stored hash
       and sends. Here is the delivered message in the Mailpit sink — matching the approved payload byte for byte.</p>
     <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8025 — Mailpit</span></div>
-      <div class="body"><img src="img/flowC-mailpit.png" alt="Mailpit showing the delivered mail: Q3 board update, to board@prokura.local"></div>
+      <div class="body"><a href="img/flowC-mailpit.png" target="_blank" rel="noopener"><img src="img/flowC-mailpit.png" alt="Mailpit showing the delivered mail: Q3 board update, to board@prokura.local"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> the agent really acts — but only the approved action, and only after a human said yes.</div>
   </div></div></section>

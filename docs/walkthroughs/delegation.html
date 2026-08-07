@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Prokura Walkthrough — Delegation (Flow A)</title>
 <link rel="stylesheet" href="walkthrough.css">
 <div class="rail"><div class="wrap">
@@ -36,7 +37,7 @@
     <p>The agent sends Alice to Keycloak's own login (PKCE-protected). This is Prokura's realm, branded,
       with a mock external IdP option — the genuine article, not a recreation.</p>
     <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8180 — Sign in to Prokura</span></div>
-      <div class="body"><img src="img/flowA-01-login.png" alt="Prokura Keycloak login page"></div>
+      <div class="body"><a href="img/flowA-01-login.png" target="_blank" rel="noopener"><img src="img/flowA-01-login.png" alt="Prokura Keycloak login page"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> the human authenticates directly with the identity provider — the agent never sees the password.</div>
   </div></div></section>
@@ -46,7 +47,7 @@
     <p>Before any token is minted, Keycloak shows Alice exactly what she is granting. <b>This is the
       delegation:</b> a human, looking at named privileges, clicking Yes.</p>
     <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8180 — Grant access</span></div>
-      <div class="body"><img src="img/flowA-02-consent.png" alt="Consent screen: Grant Access to Claude (MCP client) — Act on your behalf"></div>
+      <div class="body"><a href="img/flowA-02-consent.png" target="_blank" rel="noopener"><img src="img/flowA-02-consent.png" alt="Consent screen: Grant Access to Claude (MCP client) — Act on your behalf"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> authority is delegated by an informed human decision, scoped to declared privileges — not assumed by the agent.</div>
   </div></div></section>
@@ -57,7 +58,7 @@
       token below. Note the three things that make it safe: it carries <b>her</b> identity, it is addressed
       to <b>one</b> audience, and it <b>expires in 15 minutes</b>.</p>
     <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">127.0.0.1:9876 — agent redirect</span></div>
-      <div class="body"><img src="img/flowA-03-granted.png" alt="Delegation granted confirmation"></div>
+      <div class="body"><a href="img/flowA-03-granted.png" target="_blank" rel="noopener"><img src="img/flowA-03-granted.png" alt="Delegation granted confirmation"></a></div>
     </div>
     <div class="screen" style="margin-top:12px"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">decoded access token (real claims)</span></div>
       <div class="body term"><pre>{
