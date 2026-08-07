@@ -1,7 +1,7 @@
 # SPEC Review — Findings, Options, and How Auth0 Resolved Each
 
 **Reviews:** `SPEC.md` (AgentGate Draft v0.1)
-**Reference product:** Auth0 for AI Agents (GA since late 2025) — User Authentication, Token Vault, Async Authorization (CIBA + RAR + Guardian push), FGA for RAG, plus MCP authorization-server support and Cross App Access on the roadmap side.
+**Reference product:** Auth0 for AI Agents (GA November 19, 2025) — User Authentication, Token Vault, Async Authorization (CIBA + RAR + Guardian push), FGA for RAG. Auth for MCP went GA May 2026; Cross App Access is in Early Access. All Auth0 and Keycloak capability claims in this document were verified against official docs, source, and release notes in August 2026.
 
 Each item below states the problem, how Auth0 resolved it (or why they sidestepped it), the realistic options for AgentGate, and a recommendation. Findings F1–F9 are defects or unimplementable claims in the current draft; questions Q1–Q7 are open design decisions that reshape the spec.
 
@@ -54,7 +54,7 @@ This is self-referential — the tupleset `can_use` appears inside its own defin
 
 **Problem.** Flow A exchanges the user token to `audience = agent-tools-api`. Flow B then has the agent present *that same token* to the Token Broker. The broker would be accepting a token addressed to a different resource — precisely the confused-deputy shape §11 says user-context FGA checks exist to prevent. Any holder of an `agent-tools-api` token could mint third-party tokens.
 
-**How Auth0 resolved it.** The problem doesn't arise in their architecture: Token Vault *is part of the authorization server*. The agent calls Auth0's own token endpoint with the custom grant `urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token`, presenting the Auth0 refresh token; the AS validates its own client and its own token. There is no third-party resource server accepting someone else's audience.
+**How Auth0 resolved it.** The problem doesn't arise in their architecture: Token Vault *is part of the authorization server*. The agent calls Auth0's own token endpoint with the custom grant `urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token`, presenting an Auth0 refresh token *or* access token as the `subject_token` (two documented variants with distinct `subject_token_type` URNs); the AS validates its own client and its own token. There is no third-party resource server accepting someone else's audience.
 
 **Options.**
 
@@ -68,7 +68,7 @@ This is self-referential — the tupleset `can_use` appears inside its own defin
 
 **Problem.** §9: "All agent-held tokens ≤ 15 min TTL." The broker does not control upstream token lifetimes: Google access tokens live ~1 hour; classic GitHub OAuth-app tokens don't expire at all. Returning `expires_in: 900` doesn't make a leaked provider token stop working at 15 minutes — the rule as written is false advertising, and it's the first thing a security reviewer will ding.
 
-**How Auth0 resolved it.** They don't claim it. Token Vault documentation states federated access tokens are short-lived *with lifetime determined by the upstream provider*; Auth0 refreshes as needed and hands out whatever the provider mints. The ≤15-min bound applies only to tokens Auth0 itself issues.
+**How Auth0 resolved it.** They don't claim it. Auth0's Token Vault blog states federated access tokens' lifetime *depends on the upstream provider*, with Token Vault refreshing as needed; the docs pages make no lifetime promise at all — responses simply carry the provider's `expires_in`. Auth0 imposes no 15-minute bound anywhere (its own access tokens default to 24 hours); the ≤15-min figure is this spec's own design rule, not an Auth0 property.
 
 **Options.**
 
@@ -82,7 +82,7 @@ This is self-referential — the tupleset `can_use` appears inside its own defin
 
 **Problem.** Flow B assumes every provider hands out a `refresh_token`. Classic GitHub **OAuth apps** issue non-expiring access tokens with **no refresh token**; refresh tokens only exist for **GitHub Apps** with user-token expiration enabled. Related: "scope-down enforced" (Flow B acceptance) is only cryptographically real where the provider supports narrowing — Google allows requesting a scope subset on refresh; GitHub does not, so for GitHub the broker can only *decline* over-broad requests, never mint a narrower token.
 
-**How Auth0 resolved it.** Pre-integrated connections abstract this: Token Vault stores whatever the provider issues (including non-expiring tokens) and refreshes only where refresh exists. Scope handling is configured per connection at consent time, not narrowed per exchange.
+**How Auth0 resolved it.** Pre-integrated connections abstract this: GitHub is a documented Token Vault provider, and neither exchange flow accepts a scope parameter — scopes are fixed at the connection/consent step, never narrowed per exchange. (How the vault internally handles GitHub's non-expiring OAuth-app tokens is not documented; Auth0's GitHub guide even punts scope configuration to the GitHub side — "scopes are not supported for GitHub yet.")
 
 **Options.**
 
@@ -94,7 +94,7 @@ This is self-referential — the tupleset `can_use` appears inside its own defin
 
 ### F5. Free-text `binding_message` is the vulnerability, not the control
 
-**Problem.** §9 makes "binding_message rendered verbatim" a hard rule — but the message is *authored by the agent*, i.e., by the LLM, the very principal the human is being asked to check. A prompt-injected agent can request `email:send` to an attacker while the binding message reads "Send your weekly summary to yourself?". The human approves text written by the adversary. Additionally, Keycloak validates `binding_message` with a restricted charset and short length limit, so rich descriptive messages will be rejected at the protocol layer anyway.
+**Problem.** §9 makes "binding_message rendered verbatim" a hard rule — but the message is *authored by the agent*, i.e., by the LLM, the very principal the human is being asked to check. A prompt-injected agent can request `email:send` to an attacker while the binding message reads "Send your weekly summary to yourself?". The human approves text written by the adversary. Additionally, Keycloak validates `binding_message` against `^[a-zA-Z0-9-._+/!?#]{1,50}$` — max 50 characters, no spaces — so rich descriptive messages will be rejected at the protocol layer anyway.
 
 **How Auth0 resolved it.** Rich Authorization Requests (RAR): the agent submits a structured `authorization_details` payload (action type, recipient, amount, …); the **trusted** Guardian push UI renders it; and the resource server independently validates that the executed action matches the approved payload. The agent never controls the rendering, and the approval is bound to parameters, not prose. (The spec punts RAR to v1 — but Keycloak doesn't support RAR today, so v1 would hit the same wall.)
 
@@ -110,7 +110,7 @@ This is self-referential — the tupleset `can_use` appears inside its own defin
 
 **Problem.** M3 (the riskiest milestone) budgets a custom Keycloak `AuthenticationChannelProvider` SPI in Java (`extensions/keycloak-ciba-ntfy/`).
 
-**How Auth0 resolved it.** Not applicable — their CIBA channel is their own Guardian infrastructure. But Keycloak itself ships a built-in **HTTP authentication channel provider** for CIBA, configured via `--spi-ciba-auth-channel-ciba-http-auth-channel-http-authentication-channel-uri`: Keycloak POSTs the backchannel auth request (including `binding_message`) to an external HTTP endpoint, and the decision comes back on Keycloak's standard callback endpoint.
+**How Auth0 resolved it.** Not applicable — their CIBA channel is their own Guardian infrastructure. But Keycloak itself ships a built-in **HTTP authentication channel provider** for CIBA, configured via `--spi-ciba-auth-channel--ciba-http-auth-channel--http-authentication-channel-uri` (double-dash separators on Keycloak 26+; older single-dash spelling is deprecated): Keycloak POSTs the backchannel auth request (including `binding_message`) to an external HTTP endpoint, and the decision comes back on Keycloak's standard callback endpoint at `/realms/{realm}/protocol/openid-connect/ext/ciba/auth/callback`, authorized by the bearer token Keycloak included in the delegation request.
 
 **Options.**
 
@@ -124,7 +124,7 @@ This is self-referential — the tupleset `can_use` appears inside its own defin
 
 **Problem.** Public ntfy topics are bearer capabilities: anyone who guesses the topic name can **subscribe** (leaking pending-action details) and **publish** (spoofing approval notifications). The spec also never states how the approve/deny callback authenticates the decision-maker.
 
-**How Auth0 resolved it.** Guardian push: an enrolled, cryptographically bound device; the approval response is signed by device keys. Auth0 explicitly recommends push over email/SMS channels because those are phishable.
+**How Auth0 resolved it.** Guardian push: an enrolled, cryptographically bound device (RSA keypair generated at enrollment; responses signed with the device's private key). Auth0's CIBA offers exactly two channels — Guardian push (default) and email — and its docs recommend push because email "can be vulnerable to phishing attacks." (SMS is not a CIBA channel at Auth0.)
 
 **Options.**
 
@@ -138,7 +138,7 @@ This is self-referential — the tupleset `can_use` appears inside its own defin
 
 **Problem.** Flow C's acceptance says the CIBA-issued token is "single-use scope." CIBA returns an ordinary access token for the requested scope; nothing in Keycloak makes it single-use. Single-use requires replay tracking at the resource server — which appears in no component's scope.
 
-**How Auth0 resolved it.** They don't claim single-use. Their bound is RAR + short TTL: the token authorizes a *specific parameterized action* (validated by the resource server against `authorization_details`), which makes replay mostly moot — replaying the token can only re-authorize the same already-executed action.
+**How Auth0 resolved it.** They don't claim single-use. Their bound is RAR: the token authorizes a *specific parameterized action* — per their docs, "your resource server is responsible for the granular validation of the content within `authorization_details`" — which makes replay mostly moot, since replaying the token can only re-authorize the same already-executed action. (The only short TTL Auth0 documents in this flow is the authorization request's `auth_req_id` expiry, default 300 s; there is no special access-token lifetime.)
 
 **Options.**
 
@@ -150,7 +150,7 @@ This is self-referential — the tupleset `can_use` appears inside its own defin
 
 ### F9. Keycloak already stores external IdP tokens
 
-**Problem.** With "Store Tokens" enabled on an identity provider, Keycloak keeps upstream tokens and exposes them at `GET /realms/{realm}/broker/{alias}/token` (requires the `broker.read-token` role). The spec's broker duplicates the *acquisition* half of this without acknowledging the overlap. (Keycloak does not refresh external tokens or do leases — so the broker's lifecycle half genuinely adds value.)
+**Problem.** With "Store Tokens" enabled on an identity provider, Keycloak keeps upstream tokens and exposes them at `GET /realms/{realm}/broker/{alias}/token` (requires the `broker.read-token` role). The spec's broker duplicates the *acquisition* half of this without acknowledging the overlap. And since Keycloak 26.4 (Sept 2025), retrieval also auto-refreshes the stored external token when a valid refresh token exists — so the refresh half overlaps too. What the broker still uniquely adds: leases, per-request scope-down policy, per-agent gating, and audit.
 
 **How Auth0 resolved it.** Full unification: signing in with (or linking) a connection *is* the vault-seeding act; there is no second consent flow the IdP doesn't know about.
 
@@ -174,10 +174,10 @@ The spec oscillates: "reference implementation" in the one-liner, production-gra
 
 The biggest architectural fork in the doc. Flow B runs a standalone Authorization Code flow the IdP never sees, splitting the identity story (and the spec never says how the broker authenticates the user during grant setup).
 
-**How Auth0 resolved it.** Unified with login: sign in with Google → tokens vaulted; additional providers attach via an account-linking "connect account" flow under the same identity. Consent, identity, and vault-seeding are one motion.
+**How Auth0 resolved it.** Unified with login: sign in with Google → tokens vaulted; additional providers attach via the Connected Accounts flow (My Account API: `/me/v1/connected-accounts/connect` → provider consent → callback) under the same identity. First-provider consent, identity, and vault-seeding are one motion; extra providers are a second motion, but always through the provider's own consent screen. (Connected Accounts' GA status is murky — community threads still called it Early Access in spring 2026.)
 
 - **A. Broker-owned flows (as specced).** Max flexibility (incremental/per-request scopes), least Keycloak coupling; but two consent surfaces, and grant identity is only correlated to Keycloak by the broker's own bookkeeping. If chosen: require the setup flow to start from an authenticated Keycloak session (broker validates a user token before `POST /v1/grants/{provider}/start`).
-- **B (recommended). Keycloak account linking as acquisition; broker owns lifecycle.** Use Keycloak identity providers with *Store Tokens* enabled and **client-initiated account linking** for connecting Google/GitHub to an existing account (this is Keycloak's analog of Auth0's connect-account flow). The broker pulls the stored token via `/broker/{alias}/token`, imports the refresh token into OpenBao, and owns refresh/lease/scope-down from there. One identity, one consent surface, less OAuth code to write; closest to Auth0's shape while the broker still earns its place (F9). Trade-off: scopes are configured statically per IdP in the realm, not incrementally per request.
+- **B (recommended). Keycloak account linking as acquisition; broker owns lifecycle.** Use Keycloak identity providers with *Store Tokens* enabled and **client-initiated account linking** for connecting Google/GitHub to an existing account (this is Keycloak's analog of Auth0's connect-account flow; on current Keycloak, invoke it via the application-initiated action `kc_action=idp_link:<alias>` — the older `/broker/{provider}/link` endpoint is deprecated). The broker pulls the stored token via `/broker/{alias}/token`, imports the refresh token into OpenBao, and owns refresh/lease/scope-down from there. One identity, one consent surface, less OAuth code to write; closest to Auth0's shape while the broker still earns its place (F9). Trade-off: scopes are configured statically per IdP in the realm, not incrementally per request.
 - **C. Hybrid.** Login provider (Google) seeds via B; extra providers via A. Two code paths in v0 — probably not worth it yet; a defensible v1 evolution.
 
 ### Q3. Who writes `can_use` tuples, and what does the user consent to?
@@ -194,10 +194,10 @@ Currently the Flow B FGA gate checks tuples with no defined provisioning path. O
 
 The spec hedges ("LangChain or MCP server"; DCR sits in the architecture diagram; MCP AS mode is v1 roadmap).
 
-**How Auth0 resolved it.** They ship both framework SDK integrations (LangGraph, Vercel AI, LlamaIndex, Genkit) *and* market MCP authorization heavily — securing MCP servers with Auth0 as AS is one of their loudest 2025–26 stories.
+**How Auth0 resolved it.** They ship both framework SDK integrations (LangGraph, Vercel AI, LlamaIndex, Genkit — plus a Cloudflare Agents starter) *and* a named "Auth for MCP" product, GA since May 2026 — securing MCP servers with Auth0 as AS is one of their loudest 2025–26 stories.
 
 - **A. LangChain-only v0** (as mostly specced). Least risk; least distinctive.
-- **B (recommended). MCP server as the headline demo.** "Keycloak as an MCP authorization server" (OAuth 2.1 + DCR + protected-resource metadata, RFC 9728) is arguably the most-searched-for, least-well-served piece of this whole space, and Keycloak's DCR support makes it genuinely reachable. The gated-action and brokered-token flows demo identically through MCP tools. Cost: something falls out — the most likely candidate is the second provider (Google) slipping to v1, or the RAG corpus shrinking.
+- **B (recommended). MCP server as the headline demo.** "Keycloak as an MCP authorization server" is arguably the most-searched-for, least-well-served piece of this whole space, and it's genuinely reachable: Keycloak 26.4 shipped explicit MCP AS support (RFC 8414 metadata, DCR per RFC 7591, an official MCP guide). Per RFC 9728, protected-resource metadata is published by the MCP server itself, pointing at Keycloak; the real remaining gap is RFC 8707 Resource Indicators (unsupported — scopes are the documented workaround), so MCP spec 2025-06-18+ is only partially covered. The gated-action and brokered-token flows demo identically through MCP tools. Cost: something falls out — the most likely candidate is the second provider (Google) slipping to v1, or the RAG corpus shrinking.
 - **C. Both in v0.** Scope risk in a 6-week plan is severe; only viable if Q1 = portfolio piece and depth is sacrificed elsewhere.
 
 ### Q5. Is Python-only the right SDK bet?
@@ -212,7 +212,7 @@ The spec hedges ("LangChain or MCP server"; DCR sits in the architecture diagram
 
 "Drafts email + gated send" via Gmail means `gmail.send` — a Google **restricted** scope with verification requirements (fine in testing mode with allowlisted users, but that constraint is invisible in the spec).
 
-**How Auth0 resolved it.** Their quickstarts use Google/Gmail through pre-verified first-party connections — an option unavailable to an OSS project.
+**How Auth0 resolved it.** They didn't, really. Their quickstarts do use Gmail/Calendar — but customers must create their *own* Google OAuth client and clear Google's verification for sensitive scopes themselves (Auth0's docs warn of the 100-login cap until the consent screen is verified). Auth0's "integrations" are pre-configured connection templates, not pre-verified Google clients — the Google friction is identical for AgentGate.
 
 - **A (recommended). Mailpit (local SMTP sink) for the gated send.** Zero Google friction, CIBA demos identically, works offline. Then give Google a different showcase: Calendar ("create event" as a second gated action) or Drive as the ACL'd RAG corpus (which would make Flow D's tuples mirror real Drive permissions — a strong demo).
 - **B. Gmail in testing mode.** Real-world texture; every person who clones the repo must configure an OAuth consent screen and allowlist themselves — meaningful quickstart friction.
@@ -224,7 +224,7 @@ The spec hedges ("LangChain or MCP server"; DCR sits in the architecture diagram
   - **A (recommended). Build minimal, credit prior art.** The value proposition is the *assembly* — delegation + CIBA + FGA + brokering under one identity model — not the broker in isolation. Say so in the README; add a comparison row.
   - **B. Embed Nango.** Less code, but a heavyweight dependency, and check its current license terms before assuming it's embeddable in an Apache-2.0 project.
 - **Name check:** "AgentGate" is likely collision-prone. Search GitHub/npm/PyPI and trademarks before the README ships.
-- **Roadmap addition:** Okta/Auth0 are pushing **Cross App Access (XAA)** — the Identity Assertion Authorization Grant (ID-JAG) draft — for app-to-app agent access in enterprises. Worth a §10 bullet so the roadmap tracks where the commercial ecosystem is heading.
+- **Roadmap addition:** Okta/Auth0 are pushing **Cross App Access (XAA)** — implementing the IETF draft `draft-ietf-oauth-identity-assertion-authz-grant` (its token is the ID-JAG, Identity Assertion JWT Authorization Grant) — for app-to-app agent access in enterprises. At Auth0 it's in Early Access via Enterprise Connections (not GA). Worth a §10 bullet so the roadmap tracks where the commercial ecosystem is heading.
 
 ---
 
