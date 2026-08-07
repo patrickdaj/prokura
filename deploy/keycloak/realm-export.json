@@ -12,7 +12,7 @@
   "adminEventsDetailsEnabled": true,
   "attributes": {
     "cibaBackchannelTokenDeliveryMode": "poll",
-    "cibaExpiresIn": "120",
+    "cibaExpiresIn": "30",
     "cibaInterval": "5",
     "cibaAuthRequestedUserHint": "login_hint"
   },

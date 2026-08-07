@@ -27,7 +27,17 @@ is trusted:
   Registration enabled for MCP (M4), any client can register itself; the
   `can_use` tuple is the gate between a registered client and a user's grants.
 
-The **approval service** joins the TCB in M3.
+- **Approval service** (M3) — the CIBA-gated human-approval authority. It holds
+  the structured action payload and its hash, renders the human-facing approval
+  surface itself (never agent-authored text), relays the human's decision to
+  Keycloak's CIBA callback, and is the sole issuer + introspector of the
+  single-use action token. It joins the TCB: a compromise could approve actions,
+  so decisions are only accepted from an authenticated session and every
+  register/delegate/decision/consume event is audited.
+- **Tools-API** (M3) — the resource server for the gated `email.send` action. It
+  is not fully trusted to *decide*, but it enforces the gate: audience check
+  (M1 defense) plus hash-verify + single-use consume against the approval service
+  before any action runs.
 
 Agents and MCP clients are **outside** the TCB: an agent can obtain a provider
 token only by presenting a broker-audience token (RFC 8693, `aud=token-broker`)
@@ -54,6 +64,26 @@ never claims a provider token expires at 15 minutes.
 narrowing request within granted scopes returns the token with its *actual*
 scopes and reports them honestly — the broker never fakes narrowing and never
 silently widens.
+
+## Human approval (Flow C, M3)
+
+- **Trusted rendering.** The approval UI renders the action, params, agent, and
+  scopes from the approval service's stored payload — never from any
+  agent-supplied string. The CIBA `binding_message` carries only a reference ID
+  (Keycloak-validated `^[a-zA-Z0-9-._+/!?#]{1,50}$`), so agent-authored prose
+  never reaches the human.
+- **Single-use, hash-bound action token.** The approval service issues the action
+  token and is its sole introspector. Before `email.send` runs, the tools-API
+  verifies the action+params hash equals the approved hash (parameter tampering
+  is refused) and the approval service **atomically consumes** the reference
+  (replay is refused). Both are asserted by tests.
+- **Inert notifications.** ntfy is deny-all; only the approval service may publish
+  (Basic auth), to per-user unguessable topics. A notification carries only a
+  reference ID + deep link — no action params — and a fabricated publish is
+  refused (403) and changes no approval state. Decisions happen only in the
+  authenticated UI.
+- **Clean abort.** On denial or the 30 s CIBA timeout, the agent's poll returns an
+  error, no action token is usable, and the action never runs.
 
 ## Known residual risks (M2 scope)
 

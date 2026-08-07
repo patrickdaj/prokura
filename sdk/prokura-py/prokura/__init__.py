@@ -1,9 +1,15 @@
 """Prokura agent SDK (Python v0).
 
-M1 surface: `exchange()`. M2 adds `get_provider_token()`. Later milestones add
-require_approval() (M3), fga_filter() (M5).
+M1 surface: `exchange()`. M2 adds `get_provider_token()`. M3 adds
+`require_approval()`. A later milestone adds fga_filter() (M5).
 """
 
+from .approval import (
+    ApprovalDenied,
+    ApprovalError,
+    ApprovalTimeout,
+    require_approval,
+)
 from .exchange import ExchangeDenied, ExchangeError, exchange
 from .provider_token import (
     ConsentDenied,
@@ -20,4 +26,8 @@ __all__ = [
     "ProviderTokenError",
     "ConsentDenied",
     "ScopeExceeded",
+    "require_approval",
+    "ApprovalError",
+    "ApprovalDenied",
+    "ApprovalTimeout",
 ]

@@ -422,6 +422,86 @@
      "expr": "{service_name=\"token-broker\"} |= \"broker_audit\""
     }
    ]
+  },
+  {
+   "id": 10,
+   "type": "stat",
+   "title": "Actions approved (1h)",
+   "description": "Human-approved sensitive actions (Flow C). Source: approval realtime audit in Loki.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 36
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "purple"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "graphMode": "area",
+    "colorMode": "value",
+    "textMode": "value"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"approval\"} |= \"approval_audit\" |= \"event=consumed\" [1h]))"
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "type": "logs",
+   "title": "Human approval \u2014 live audit",
+   "description": "register / delegate / approve / deny / consume \u2014 each with a correlation id joining to the flow trace.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "h": 11,
+    "w": 18,
+    "x": 6,
+    "y": 36
+   },
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending",
+    "enableLogDetails": true,
+    "dedupStrategy": "none"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "{service_name=\"approval\"} |= \"approval_audit\""
+    }
+   ]
   }
  ]
 }

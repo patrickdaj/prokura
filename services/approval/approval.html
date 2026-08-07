@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Prokura — Approve an action</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#0b0d10; color:#e7ebf0;
+    background-image:radial-gradient(1200px 600px at 50% -10%, #14181d 0%, #0b0d10 60%); }
+  .wordmark { letter-spacing:.55em; font-weight:600; font-size:15px; text-align:center; color:#cfd6de; margin:0 0 28px .55em; }
+  .card { width:min(92vw,470px); background:#12161b; border:1px solid #232a31; border-radius:14px;
+    padding:30px 32px 26px; box-shadow:0 24px 60px -30px rgba(0,0,0,.8); }
+  h1 { font-size:19px; font-weight:600; margin:0 0 6px; }
+  .sub { color:#93a0ad; font-size:13.5px; margin:0 0 22px; line-height:1.5; }
+  .warn { display:inline-block; font-size:11px; font-family:ui-monospace,monospace; color:#f2b24d;
+    border:1px solid #4a3c1e; background:#211c10; border-radius:6px; padding:2px 8px; margin-bottom:18px; }
+  .row { display:flex; justify-content:space-between; gap:12px; padding:11px 0; border-top:1px solid #1d232a; font-size:14px; }
+  .row .k { color:#8a97a4; } .row .v { color:#e7ebf0; font-weight:500; text-align:right; word-break:break-word; }
+  .params { background:#0e1216; border:1px solid #1d232a; border-radius:8px; padding:11px 13px; margin-top:12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:#b8c6d4; white-space:pre-wrap; }
+  .actions { display:flex; gap:10px; margin-top:22px; }
+  button { flex:1; border:0; border-radius:9px; padding:11px 0; font-size:14px; font-weight:600; cursor:pointer; }
+  .approve { background:#3d7bfd; color:#fff; } .approve:hover { background:#5a8dfd; }
+  .deny { background:transparent; color:#b8c6d4; border:1px solid #2b343d; } .deny:hover { border-color:#3a4650; }
+  .note { margin-top:18px; font-size:11.5px; color:#6b7987; line-height:1.5; }
+  .result { margin-top:16px; font-size:13.5px; display:none; }
+  .result.ok { color:#4ade80; display:block; } .result.err { color:#f87171; display:block; }
+</style>
+</head>
+<body>
+  <div>
+    <p class="wordmark">PROKURA</p>
+    <div class="card" id="card">
+      <div class="warn">⚠ Review the details below — this is what will run</div>
+      <h1>Approve a sensitive action</h1>
+      <p class="sub">An agent is asking to perform an action on your behalf. The details are
+        rendered from the approval service, <b style="color:#e7ebf0">not</b> from anything the agent wrote.</p>
+      <div class="row"><span class="k">Agent</span><span class="v" id="agent">—</span></div>
+      <div class="row"><span class="k">Action</span><span class="v" id="action">—</span></div>
+      <div class="row"><span class="k">Reference</span><span class="v" id="ref" style="font-family:ui-monospace,monospace;font-size:12px">—</span></div>
+      <div class="params" id="params">loading…</div>
+      <div class="actions">
+        <button class="deny" id="deny">Deny</button>
+        <button class="approve" id="approve">Approve</button>
+      </div>
+      <div class="result" id="result"></div>
+      <p class="note">Approving lets the agent run this exact action once. A single-use token
+        is issued and the action is verified against these details before it executes.</p>
+    </div>
+  </div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const ref = q.get("ref") || location.hash.replace("#","");
+  const token = q.get("token") || "";
+  const $ = (id) => document.getElementById(id);
+  const result = $("result");
+  async function load() {
+    const r = await fetch("/approval/" + encodeURIComponent(ref), {
+      headers: { "Authorization": "Bearer " + token } });
+    if (!r.ok) { $("params").textContent = "Could not load this approval."; return; }
+    const a = await r.json();
+    $("agent").textContent = a.agent; $("action").textContent = a.action;
+    $("ref").textContent = a.ref;
+    $("params").textContent = JSON.stringify(a.params, null, 2);
+  }
+  async function decide(decision) {
+    const r = await fetch("/approval/" + encodeURIComponent(ref) + "/decide", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }) });
+    const b = await r.json().catch(() => ({}));
+    result.className = "result " + (r.ok ? "ok" : "err");
+    result.textContent = r.ok
+      ? (decision === "approve" ? "✓ Approved — the agent may now run this action once." : "Denied — the action will not run.")
+      : "✗ " + (b.error || ("HTTP " + r.status));
+  }
+  $("approve").onclick = () => decide("approve");
+  $("deny").onclick = () => decide("deny");
+  if (ref && token) load(); else $("params").textContent = "Missing reference or session.";
+</script>
+</body>
+</html>

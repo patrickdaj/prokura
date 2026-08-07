@@ -23,8 +23,10 @@ services:
       - start-dev
       - --import-realm
       - --health-enabled=true
-      # F6-A spike: built-in CIBA HTTP authentication channel (Keycloak 26+ double-dash SPI form)
-      - --spi-ciba-auth-channel--ciba-http-auth-channel--http-authentication-channel-uri=http://ciba-spike:8000/ciba/delegate
+      # M3: built-in CIBA HTTP authentication channel points at the approval
+      # service (F6-A spike proved this transport in M0; ciba-spike is retained
+      # behind the `spike` profile as a reference receiver).
+      - --spi-ciba-auth-channel--ciba-http-auth-channel--http-authentication-channel-uri=http://approval:8120/ciba/delegate
       # Telemetry (flag spellings verified against this image: tracing-* = traces,
       # telemetry-* = OTLP metrics/logs — two distinct families in 26.7)
       - --tracing-enabled=true
@@ -119,6 +121,20 @@ services:
     ports:
       - "8090:80"
 
+  # M3: provision the approval service's ntfy publisher (deny-all server, F7).
+  ntfy-init:
+    image: binwiederhier/ntfy:v2.27.0
+    entrypoint: ["sh", "/init.sh"]
+    environment:
+      NTFY_APPROVAL_PASSWORD: ${NTFY_APPROVAL_PASSWORD:-prokura-approval-dev}
+    volumes:
+      - ./deploy/ntfy/server.yml:/etc/ntfy/server.yml:ro
+      - ./deploy/ntfy/init.sh:/init.sh:ro
+      - ntfy-data:/var/lib/ntfy
+    depends_on:
+      - ntfy
+    restart: on-failure
+
   mailpit:
     image: axllent/mailpit:v1.30.6
     ports:
@@ -177,6 +193,52 @@ services:
       openbao:
         condition: service_started
       openfga:
+        condition: service_started
+
+  # M3: Approval Service — CIBA-gated human approval. Keycloak's CIBA HTTP
+  # channel POSTs delegation requests here; the trusted UI renders the
+  # service-held payload and relays the decision to Keycloak's callback. Joins
+  # the trusted computing base. Fire-and-forget telemetry (no depends_on: lgtm).
+  approval:
+    build: ./services/approval
+    ports:
+      - "8120:8120"
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/prokura
+      PROKURA_REALM: prokura
+      DATABASE_URL: postgresql://${POSTGRES_USER:-prokura}:${POSTGRES_PASSWORD:-prokura-dev}@postgres:5432/${POSTGRES_DB:-prokura}
+      NTFY_URL: http://ntfy
+      NTFY_USER: prokura-approval
+      NTFY_APPROVAL_PASSWORD: ${NTFY_APPROVAL_PASSWORD:-prokura-approval-dev}
+      APPROVAL_PUBLIC_URL: http://localhost:8120
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
+      OTEL_SERVICE_NAME: approval
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+  # M3: Tools-API — a resource server exposing the gated `email.send` action.
+  # Verifies the audience (M1 defense) then hash + single-use via the approval
+  # service before sending through the Mailpit sink.
+  tools-api:
+    build: ./services/tools-api
+    ports:
+      - "8130:8130"
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/prokura
+      PROKURA_REALM: prokura
+      TOOLS_AUDIENCE: agent-tools-api
+      APPROVAL_URL: http://approval:8120
+      MAILPIT_HOST: mailpit
+      MAILPIT_PORT: "1025"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
+      OTEL_SERVICE_NAME: tools-api
+    depends_on:
+      keycloak:
         condition: service_started
 
   # M0 spike (F6-A): receives Keycloak's CIBA delegation POSTs and returns
