@@ -30,7 +30,11 @@
           "value": "alice",
           "temporary": false
         }
-      ]
+      ],
+      "realmRoles": ["default-roles-prokura"],
+      "clientRoles": {
+        "broker": ["read-token"]
+      }
     }
   ],
   "clientScopes": [
@@ -115,6 +119,58 @@
           }
         }
       ]
+    },
+    {
+      "name": "broker-read-token",
+      "description": "Emits resource_access.broker.roles so a token presented to /broker/{alias}/token passes Keycloak's read-token check (M2 spike finding). The realm omits Keycloak's built-in 'roles' scope, so this is the minimal client-role mapper the broker needs.",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "broker read-token role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "broker",
+            "claim.name": "resource_access.${client_id}.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "acme",
+      "displayName": "ACME (mock external provider)",
+      "providerId": "oidc",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": true,
+      "addReadTokenRoleOnCreate": true,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "prokura-broker-idp",
+        "clientSecret": "acme-idp-dev-secret",
+        "clientAuthMethod": "client_secret_post",
+        "authorizationUrl": "http://localhost:8180/realms/acme/protocol/openid-connect/auth",
+        "tokenUrl": "http://keycloak:8080/realms/acme/protocol/openid-connect/token",
+        "jwksUrl": "http://keycloak:8080/realms/acme/protocol/openid-connect/certs",
+        "userInfoUrl": "http://keycloak:8080/realms/acme/protocol/openid-connect/userinfo",
+        "logoutUrl": "http://localhost:8180/realms/acme/protocol/openid-connect/logout",
+        "issuer": "http://localhost:8180/realms/acme",
+        "validateSignature": "true",
+        "useJwksUrl": "true",
+        "pkceEnabled": "true",
+        "pkceMethod": "S256",
+        "backchannelSupported": "false",
+        "syncMode": "IMPORT",
+        "defaultScope": "openid profile email"
+      }
     }
   ],
   "clients": [
@@ -128,7 +184,7 @@
       "directAccessGrantsEnabled": false,
       "redirectUris": ["http://localhost/*", "http://127.0.0.1/*"],
       "webOrigins": ["+"],
-      "defaultClientScopes": ["basic", "profile"],
+      "defaultClientScopes": ["basic", "profile", "broker-read-token"],
       "attributes": { "pkce.code.challenge.method": "S256" }
     },
     {
@@ -162,7 +218,8 @@
       "serviceAccountsEnabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "token-broker-dev-secret",
-      "attributes": {}
+      "defaultClientScopes": ["basic", "broker-read-token"],
+      "attributes": { "standard.token.exchange.enabled": "true" }
     },
     {
       "clientId": "agent-tools-api",

@@ -145,3 +145,120 @@ def fga_store_id(openfga: str) -> str:
     stores = [s for s in r.json().get("stores", []) if s["name"] == FGA_STORE_NAME]
     assert stores, f"no OpenFGA store named {FGA_STORE_NAME!r} — did openfga-init run?"
     return stores[-1]["id"]
+
+
+# --- M2 (token broker) support ------------------------------------------------
+
+BROKER_URL = os.environ.get("PROKURA_BROKER_URL", "http://localhost:8110")
+KC_ADMIN_USER = os.environ.get("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
+KC_ADMIN_PASSWORD = os.environ.get("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
+
+
+@pytest.fixture(scope="session")
+def broker() -> str:
+    wait_http(f"{BROKER_URL}/healthz", ok=lambda r: r.status_code == 200)
+    return BROKER_URL
+
+
+def admin_token() -> str:
+    r = httpx.post(
+        f"{KEYCLOAK_URL}/realms/master/protocol/openid-connect/token",
+        data={"grant_type": "password", "client_id": "admin-cli",
+              "username": KC_ADMIN_USER, "password": KC_ADMIN_PASSWORD},
+        timeout=10.0,
+    )
+    r.raise_for_status()
+    return r.json()["access_token"]
+
+
+def _alice_id(admin: str) -> str:
+    r = httpx.get(f"{KEYCLOAK_URL}/admin/realms/{REALM}/users?username={DEMO_USER}",
+                  headers={"Authorization": f"Bearer {admin}"}, timeout=10.0)
+    r.raise_for_status()
+    return r.json()[0]["id"]
+
+
+def _is_acme_linked(admin: str) -> bool:
+    uid = _alice_id(admin)
+    r = httpx.get(f"{KEYCLOAK_URL}/admin/realms/{REALM}/users/{uid}/federated-identity",
+                  headers={"Authorization": f"Bearer {admin}"}, timeout=10.0)
+    r.raise_for_status()
+    return any(fi.get("identityProvider") == "acme" for fi in r.json())
+
+
+def link_acme(keycloak: str) -> None:
+    """Drive kc_action=idp_link:acme for alice headlessly (the M2 spike ceremony),
+    idempotent — a no-op if already linked. Cookies keyed per realm path because
+    Keycloak marks them Secure on plain HTTP and per-realm names collide."""
+    import base64
+    import hashlib
+    import html as html_mod
+    import re
+    import secrets
+
+    admin = admin_token()
+    if _is_acme_linked(admin):
+        return
+
+    b64 = lambda x: base64.urlsafe_b64encode(x).rstrip(b"=").decode()  # noqa: E731
+    verifier = b64(secrets.token_bytes(32))
+    challenge = b64(hashlib.sha256(verifier.encode()).digest())
+    redirect = "http://127.0.0.1/cb"
+    jars: dict[str, dict] = {}
+
+    def realm_of(u: str) -> str:
+        m = re.search(r"/realms/([^/]+)/", u)
+        return m.group(1) if m else REALM
+
+    def merge(u, resp):
+        jar = jars.setdefault(realm_of(u), {})
+        for sc in resp.headers.get_list("set-cookie"):
+            k, v = sc.split(";", 1)[0].split("=", 1)
+            jar[k] = v
+
+    def cookie(u):
+        return "; ".join(f"{k}={v}" for k, v in jars.get(realm_of(u), {}).items())
+
+    def form(t):
+        m = re.search(r'id="kc-form-login"[^>]*action="([^"]+)"', t)
+        return html_mod.unescape(m.group(1)) if m else None
+
+    with httpx.Client(follow_redirects=False, timeout=20.0) as c:
+        auth = f"{keycloak}/realms/{REALM}/protocol/openid-connect/auth"
+        r = c.get(auth, params={
+            "client_id": "smoke-cli", "response_type": "code", "redirect_uri": redirect,
+            "scope": "openid", "state": "link", "kc_action": "idp_link:acme",
+            "prompt": "login", "code_challenge": challenge, "code_challenge_method": "S256"})
+        merge(auth, r)
+        action = form(r.text)
+        assert action, "no prokura login form"
+        r = c.post(action, data={"username": DEMO_USER, "password": DEMO_PASSWORD},
+                   headers={"Cookie": cookie(action)})
+        merge(action, r)
+        loc = r.headers["location"]
+        acme_done = False
+        for _ in range(10):
+            if loc.startswith("http://127.0.0.1"):
+                break
+            u = loc if loc.startswith("http") else keycloak + loc
+            r = c.get(u, headers={"Cookie": cookie(u)})
+            merge(u, r)
+            if r.status_code in (301, 302, 303, 307):
+                loc = r.headers["location"]
+                continue
+            if r.status_code == 200 and "login-actions/required-action" in u and 'name="continue"' in r.text:
+                a = html_mod.unescape(re.search(r'<form[^>]*action="([^"]+)"', r.text).group(1))
+                r = c.post(a, data={"continue": ""}, headers={"Cookie": cookie(a)})
+                merge(a, r)
+                loc = r.headers["location"]
+                continue
+            if r.status_code == 200 and "/realms/acme/" in u and not acme_done:
+                a = form(r.text)
+                r = c.post(a, data={"username": DEMO_USER, "password": DEMO_PASSWORD},
+                           headers={"Cookie": cookie(a)})
+                merge(a, r)
+                acme_done = True
+                loc = r.headers["location"]
+                continue
+            raise AssertionError(f"unexpected link hop {r.status_code} at {u}")
+    assert _is_acme_linked(admin), "acme link did not persist"

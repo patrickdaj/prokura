@@ -150,6 +150,35 @@ services:
     depends_on:
       - lgtm
 
+  # M2: Token Broker — provider-token lifecycle (leases, scope-down, per-agent
+  # consent, audit). First instrumented Python service; OTLP is fire-and-forget
+  # so there is intentionally NO depends_on: lgtm.
+  token-broker:
+    build: ./services/token-broker
+    ports:
+      - "8110:8110"
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/prokura
+      PROKURA_REALM: prokura
+      BROKER_AUDIENCE: token-broker
+      OPENBAO_URL: http://openbao:8200
+      BROKER_BAO_TOKEN: prokura-broker-dev-token
+      OPENFGA_URL: http://openfga:8080
+      FGA_STORE_NAME: prokura
+      DATABASE_URL: postgresql://${POSTGRES_USER:-prokura}:${POSTGRES_PASSWORD:-prokura-dev}@postgres:5432/${POSTGRES_DB:-prokura}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
+      OTEL_SERVICE_NAME: token-broker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      openbao:
+        condition: service_started
+      openfga:
+        condition: service_started
+
   # M0 spike (F6-A): receives Keycloak's CIBA delegation POSTs and returns
   # decisions on Keycloak's callback endpoint. Profile-gated; enable with
   #   docker compose --profile spike up -d
