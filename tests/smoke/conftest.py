@@ -73,10 +73,12 @@ def mailpit() -> str:
     return MAILPIT_URL
 
 
-def drive_login(keycloak: str) -> dict:
+def drive_login(keycloak: str, client_id: str = "smoke-cli", client_secret: str | None = None) -> dict:
     """Run the full Authorization Code + PKCE flow as a browser would; returns
-    the token response. Shared by the login smoke test and telemetry tests
-    (which need real traffic to observe). Cookies are handled manually —
+    the token response. Shared by smoke, telemetry, and exchange tests. Pass
+    client_id="agent-app" + secret to log in through the confidential agent
+    client (tokens carry azp=agent-app and are exchangeable). Cookies are
+    handled manually —
     Keycloak marks cookies Secure even on plain-HTTP dev and http.cookiejar
     refuses to replay them."""
     import base64
@@ -94,7 +96,7 @@ def drive_login(keycloak: str) -> dict:
         auth = client.get(
             f"{keycloak}/realms/{REALM}/protocol/openid-connect/auth",
             params={
-                "client_id": "smoke-cli",
+                "client_id": client_id,
                 "response_type": "code",
                 "redirect_uri": redirect_uri,
                 "scope": "openid",
@@ -118,15 +120,18 @@ def drive_login(keycloak: str) -> dict:
         assert submit.status_code == 302, f"login failed: {submit.status_code} {submit.text[:300]}"
         location = submit.headers["location"]
         assert location.startswith(redirect_uri), location
+        token_data = {
+            "grant_type": "authorization_code",
+            "client_id": client_id,
+            "code": httpx.URL(location).params["code"],
+            "redirect_uri": redirect_uri,
+            "code_verifier": verifier,
+        }
+        if client_secret:
+            token_data["client_secret"] = client_secret
         token = client.post(
             f"{keycloak}/realms/{REALM}/protocol/openid-connect/token",
-            data={
-                "grant_type": "authorization_code",
-                "client_id": "smoke-cli",
-                "code": httpx.URL(location).params["code"],
-                "redirect_uri": redirect_uri,
-                "code_verifier": verifier,
-            },
+            data=token_data,
         )
         assert token.status_code == 200, token.text
         return token.json()
