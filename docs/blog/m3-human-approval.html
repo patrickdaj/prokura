@@ -239,6 +239,9 @@
     <p class="kicker">How it works</p>
     <h2>From "please send this" to "sent, once"</h2>
     <div class="seq" id="flow"></div>
+    <div class="callout" style="border-left-color:var(--learn);margin:-6px 0 4px;">
+      <b>Where this is heading →</b> In this first cut the <b>agent</b> drives the approval (steps 1–8) and the tool only verifies at the end. That means the <i>trigger</i> depends on the agent choosing to ask — fine for enforcement (the tool still refuses without an approved token), but not where we want it. The intended design is <b>reactive</b>: the agent simply attempts the action, and <code>tools-api</code> refuses with an <i>approval-required</i> challenge that registers the real action server-side. The <b>trigger then lives on the resource server</b>, not the agent. CIBA stays client-executed by protocol; only the <i>demand</i> moves server-side. M4 builds toward this.
+    </div>
     <div class="ledger">
       <div class="entry"><div class="idx">01</div><div>
         <h3>Register the exact action</h3>

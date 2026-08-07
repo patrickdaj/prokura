@@ -84,6 +84,16 @@ silently widens.
   authenticated UI.
 - **Clean abort.** On denial or the 30 s CIBA timeout, the agent's poll returns an
   error, no action token is usable, and the action never runs.
+- **Known refinement — move the trigger to the resource server.** In the current
+  cut the *agent* initiates the approval ceremony and the tools-API only verifies
+  at execution. Enforcement is already server-side (the tool refuses without an
+  approved, hash-bound, single-use token), but the *trigger* depends on the agent
+  choosing to ask, which is influenceable. The intended design is reactive
+  step-up (RFC 9470-style): the agent attempts the action, the tools-API refuses
+  with an `approval_required` challenge and registers the real action itself, and
+  the agent then runs the (client-initiated) CIBA flow and retries. This moves the
+  un-bypassable trigger onto the resource server and lets the server define the
+  approved action from the actual request. Targeted for the M4 build.
 
 ## Known residual risks (M2 scope)
 
