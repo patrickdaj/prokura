@@ -49,6 +49,33 @@ docker compose --profile spike up -d --build
 .venv/bin/python -m pytest spike/ciba-http-channel/test_spike.py -v
 ```
 
+## Observability
+
+The stack ships with realtime telemetry: **Grafana at `http://localhost:3001`**
+(no login) with Tempo (traces), Loki (logs), and Prometheus (metrics)
+pre-provisioned, plus the **Prokura — Delegation Chain** dashboard: login
+activity, a live realm-event audit stream, request-rooted traces, latency, and
+a trace-derived service graph.
+
+Useful queries (Explore → Tempo):
+
+```traceql
+{trace:rootName =~ "GET.*|POST.*|PUT.*|PATCH.*"}   # real activity only, no healthcheck noise
+```
+
+How each component is observable: Keycloak exports traces, metrics, and logs
+via OTLP (realm events appear in the Loki stream in realtime); OpenFGA exports
+traces; OpenBao has no trace support — its authoritative record is the file
+audit device (`docker compose exec openbao cat /tmp/bao-audit.log`), and its
+operations become trace-visible through caller-side spans once the broker
+lands. Correlation convention: W3C `traceparent` joins spans across services;
+domain IDs (`prokura.correlation_id`, approval reference IDs) ride as span
+attributes and log fields — instrumentation is part of the definition of done
+for every Prokura service.
+
+Telemetry is fire-and-forget: stop the `lgtm` container and everything else
+keeps working (telemetry smoke tests skip; the rest of the suite passes).
+
 ## Prior art
 
 The token broker here is deliberately minimal. [Nango](https://github.com/NangoHQ/nango)

@@ -25,6 +25,22 @@ services:
       - --health-enabled=true
       # F6-A spike: built-in CIBA HTTP authentication channel (Keycloak 26+ double-dash SPI form)
       - --spi-ciba-auth-channel--ciba-http-auth-channel--http-authentication-channel-uri=http://ciba-spike:8000/ciba/delegate
+      # Telemetry (flag spellings verified against this image: tracing-* = traces,
+      # telemetry-* = OTLP metrics/logs — two distinct families in 26.7)
+      - --tracing-enabled=true
+      - --tracing-endpoint=http://lgtm:4317
+      - --tracing-sampler-type=always_on
+      - --tracing-service-name=keycloak
+      - --features=opentelemetry-metrics,opentelemetry-logs # preview features gating telemetry-metrics-*/telemetry-logs-*
+      - --telemetry-metrics-enabled=true
+      - --telemetry-metrics-endpoint=http://lgtm:4317
+      - --metrics-enabled=true
+      - --event-metrics-user-enabled=true # per-event counters (login, code_to_token, ...)
+      # Logs → Loki via OTLP; success-level=info surfaces realm events (LOGIN etc.)
+      # in the log stream, giving realtime audit visibility without a tailer
+      - --telemetry-logs-enabled=true
+      - --telemetry-logs-endpoint=http://lgtm:4317
+      - --spi-events-listener--jboss-logging--success-level=info
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
@@ -44,7 +60,8 @@ services:
 
   openfga:
     image: openfga/openfga:v1.18.3
-    command: run
+    # Trace flags verified against this image (`run --help`)
+    command: run --trace-enabled --trace-otlp-endpoint=lgtm:4317 --trace-sampler=always_on --trace-sample-ratio=1
     ports:
       - "8081:8080" # HTTP API (gRPC stays internal on 8081)
     healthcheck:
@@ -67,7 +84,9 @@ services:
 
   openbao:
     image: openbao/openbao:2.6.1
-    command: server -dev -dev-root-token-id=${BAO_DEV_ROOT_TOKEN:-prokura-dev-root} -dev-listen-address=0.0.0.0:8200
+    command: server -dev -dev-root-token-id=${BAO_DEV_ROOT_TOKEN:-prokura-dev-root} -dev-listen-address=0.0.0.0:8200 -config=/openbao/config/audit.hcl
+    volumes:
+      - ./deploy/openbao/audit.hcl:/openbao/config/audit.hcl:ro
     cap_add:
       - IPC_LOCK
     ports:
@@ -104,6 +123,20 @@ services:
     ports:
       - "1025:1025" # SMTP sink
       - "8025:8025" # web UI + API
+
+  # Observability receiver: Grafana + Tempo + Loki + Prometheus in one dev
+  # container. Telemetry is fire-and-forget — nothing depends_on this service
+  # and the stack stays fully functional with it stopped.
+  lgtm:
+    image: grafana/otel-lgtm:0.30.0
+    ports:
+      - "3001:3000" # Grafana UI (3000 left free for other local stacks)
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    volumes:
+      # provider yaml sits alongside the image's own provider; dashboards JSON elsewhere
+      - ./deploy/lgtm/prokura-provider.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/prokura.yaml:ro
+      - ./deploy/lgtm/dashboards:/otel-lgtm/prokura-dashboards:ro
 
   # M0 spike (F6-A): receives Keycloak's CIBA delegation POSTs and returns
   # decisions on Keycloak's callback endpoint. Profile-gated; enable with

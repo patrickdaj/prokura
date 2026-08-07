@@ -16,6 +16,7 @@ OPENFGA_URL = os.environ.get("PROKURA_OPENFGA_URL", "http://localhost:8081")
 OPENBAO_URL = os.environ.get("PROKURA_OPENBAO_URL", "http://localhost:8200")
 NTFY_URL = os.environ.get("PROKURA_NTFY_URL", "http://localhost:8090")
 MAILPIT_URL = os.environ.get("PROKURA_MAILPIT_URL", "http://localhost:8025")
+LGTM_URL = os.environ.get("PROKURA_LGTM_URL", "http://localhost:3001")
 MAILPIT_SMTP = ("localhost", int(os.environ.get("PROKURA_MAILPIT_SMTP_PORT", "1025")))
 
 REALM = "prokura"
@@ -70,6 +71,65 @@ def ntfy() -> str:
 def mailpit() -> str:
     wait_http(f"{MAILPIT_URL}/api/v1/info", ok=lambda r: r.status_code == 200)
     return MAILPIT_URL
+
+
+def drive_login(keycloak: str) -> dict:
+    """Run the full Authorization Code + PKCE flow as a browser would; returns
+    the token response. Shared by the login smoke test and telemetry tests
+    (which need real traffic to observe). Cookies are handled manually —
+    Keycloak marks cookies Secure even on plain-HTTP dev and http.cookiejar
+    refuses to replay them."""
+    import base64
+    import hashlib
+    import html as html_mod
+    import re
+    import secrets
+
+    b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()  # noqa: E731
+    verifier = b64(secrets.token_bytes(32))
+    challenge = b64(hashlib.sha256(verifier.encode()).digest())
+    redirect_uri = "http://127.0.0.1/cb"
+
+    with httpx.Client(follow_redirects=False, timeout=15.0) as client:
+        auth = client.get(
+            f"{keycloak}/realms/{REALM}/protocol/openid-connect/auth",
+            params={
+                "client_id": "smoke-cli",
+                "response_type": "code",
+                "redirect_uri": redirect_uri,
+                "scope": "openid",
+                "state": "smoke",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+        )
+        assert auth.status_code == 200, auth.text[:500]
+        cookies = dict(
+            sc.split(";", 1)[0].split("=", 1)
+            for sc in auth.headers.get_list("set-cookie")
+        )
+        match = re.search(r'id="kc-form-login"[^>]*action="([^"]+)"', auth.text)
+        assert match, "kc-form-login action not found in Keycloak login page"
+        submit = client.post(
+            html_mod.unescape(match.group(1)),
+            data={"username": DEMO_USER, "password": DEMO_PASSWORD},
+            headers={"Cookie": "; ".join(f"{k}={v}" for k, v in cookies.items())},
+        )
+        assert submit.status_code == 302, f"login failed: {submit.status_code} {submit.text[:300]}"
+        location = submit.headers["location"]
+        assert location.startswith(redirect_uri), location
+        token = client.post(
+            f"{keycloak}/realms/{REALM}/protocol/openid-connect/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": "smoke-cli",
+                "code": httpx.URL(location).params["code"],
+                "redirect_uri": redirect_uri,
+                "code_verifier": verifier,
+            },
+        )
+        assert token.status_code == 200, token.text
+        return token.json()
 
 
 @pytest.fixture(scope="session")

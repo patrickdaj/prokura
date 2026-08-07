@@ -1,0 +1,130 @@
+{
+  "uid": "prokura-delegation",
+  "title": "Prokura — Delegation Chain",
+  "description": "Realtime view of the identity stack. v1 scope (pre-M2): Keycloak traces/metrics/events, OpenFGA traces, service graph. Broker + approval panels join in M2/M3 with correlation-ID search. Convention: every milestone adding a service updates this dashboard.",
+  "tags": ["prokura"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Logins (1h)",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(keycloak_user_events_total{event=\"login\"}[1h]))"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Identity events / min",
+      "gridPos": { "x": 4, "y": 0, "w": 10, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (event) (rate(keycloak_user_events_total[$__rate_interval])) * 60",
+          "legendFormat": "{{event}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "pointSize": 4 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Realm events — live audit stream",
+      "gridPos": { "x": 14, "y": 0, "w": 10, "h": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"keycloak\"} |= \"type=\\\"\""
+        }
+      ],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
+    },
+    {
+      "id": 4,
+      "type": "traces",
+      "title": "Request-rooted traces (no healthchecks, no housekeeping)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 9 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{trace:rootName =~ \"GET.*|POST.*|PUT.*|PATCH.*\"}",
+          "limit": 20
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "HTTP req/s by endpoint (Keycloak)",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (uri) (rate(http_server_requests_milliseconds_count{uri!~\"/health.*|/metrics\"}[$__rate_interval]))",
+          "legendFormat": "{{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "pointSize": 4 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "p95 request latency (Keycloak)",
+      "gridPos": { "x": 0, "y": 17, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_milliseconds_bucket[$__rate_interval])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "pointSize": 4 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 7,
+      "type": "nodeGraph",
+      "title": "Service graph (from traces)",
+      "gridPos": { "x": 12, "y": 17, "w": 12, "h": 8 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [{ "refId": "A", "queryType": "serviceMap" }]
+    }
+  ]
+}

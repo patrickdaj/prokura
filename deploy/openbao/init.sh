@@ -32,4 +32,12 @@ EOF
 bao token create -id="prokura-broker-dev-token" -policy=broker -orphan -ttl=768h >/dev/null 2>&1 || \
   echo "openbao-init: broker token already exists"
 
+# Audit device is declarative in OpenBao 2.6+ (see deploy/openbao/audit.hcl,
+# mounted via compose) — just verify it exists.
+if bao audit list 2>/dev/null | grep -q 'file'; then
+  echo "openbao-init: file audit device active"
+else
+  echo "openbao-init: WARNING file audit device missing (check audit.hcl mount)"
+fi
+
 echo "openbao-init: done"
