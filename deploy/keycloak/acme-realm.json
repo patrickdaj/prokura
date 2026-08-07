@@ -1,0 +1,33 @@
+{
+  "realm": "acme",
+  "enabled": true,
+  "displayName": "ACME (mock external provider)",
+  "accessTokenLifespan": 3600,
+  "comment": "Stands in for GitHub/Google in the offline demo. Real providers are a bring-your-own-credentials extension. Exercises the same Keycloak identity-brokering + Store Tokens machinery the broker depends on.",
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@acme.example",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "External",
+      "credentials": [ { "type": "password", "value": "alice", "temporary": false } ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "prokura-broker-idp",
+      "name": "Prokura (identity brokering client)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "acme-idp-dev-secret",
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost:8180/realms/prokura/broker/acme/endpoint", "http://localhost:8180/*"],
+      "defaultClientScopes": ["basic", "profile", "email", "roles"],
+      "attributes": { "pkce.code.challenge.method": "S256" }
+    }
+  ]
+}

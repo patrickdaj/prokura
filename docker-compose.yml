@@ -51,6 +51,7 @@ services:
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "false"
     volumes:
       - ./deploy/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      - ./deploy/keycloak/acme-realm.json:/opt/keycloak/data/import/acme-realm.json:ro
     ports:
       - "8180:8080" # host 8180: leaves 8080 free for other local stacks
       - "9000:9000" # management (health)
