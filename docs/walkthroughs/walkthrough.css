@@ -140,9 +140,16 @@ code, code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2);
 .wf .legend span{display:inline-flex; align-items:center; gap:5px;}
 .wf .legend i{width:9px; height:9px; border-radius:2px; display:inline-block;}
 @media(max-width:560px){
-  .wf.wide .sp{grid-template-columns:118px 1fr 38px;}
-  .wf .sp .svc{width:54px;}
-  .wf .sp .nm{font-size:10px;}
+  /* code blocks: wrap instead of clipping off the right edge */
+  .term{font-size:11px; overflow-x:visible;}
+  .term pre{white-space:pre-wrap; overflow-wrap:anywhere;}
+  /* waterfall: reflow each span to [label · duration] over a full-width bar */
+  .wf.wide .sp{grid-template-columns:1fr auto; grid-template-areas:"nm dur" "track track"; gap:3px 8px; margin-bottom:9px;}
+  .wf .sp .nm{grid-area:nm; white-space:normal; overflow:visible; font-size:11px; line-height:1.3;}
+  .wf .sp .svc{width:auto; margin-right:7px;}
+  .wf .sp .d{grid-area:dur; align-self:center;}
+  .wf .sp .track{grid-area:track; height:9px;}
+  .wf .legend{font-size:10px; gap:9px;}
   .screen.pic .bar::after{content:"⤢ enlarge";}
 }
 
