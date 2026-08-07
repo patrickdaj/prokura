@@ -1,0 +1,67 @@
+schema: spec-driven
+
+context: |
+  Prokura — open-source reference implementation of agentic identity
+  (an OSS counterpart to Auth0 for AI Agents), assembled from Keycloak,
+  OpenFGA, and OpenBao. "Prokura" = civil-law registered power of attorney.
+
+  Purpose (decided): reference architecture + portfolio hybrid. Docs, ADRs,
+  threat model, and the demo ARE the product. docker-compose only; explicitly
+  non-production. Flows B (token brokering) and C (human approval) get
+  full rigor; everything else is demo-grade and says so.
+
+  Tech stack: Python 3.12, FastAPI, httpx, hvac (OpenBao), openfga-sdk,
+  PyJWT + JWKS caching, Postgres. Keycloak 26.4+ (MCP AS support, stored-token
+  auto-refresh). Java only as fallback (CIBA SPI) if the built-in HTTP
+  channel spike fails.
+
+  Headline demo: MCP-first. Keycloak as MCP authorization server (RFC 8414
+  metadata + DCR; RFC 9728 metadata published by the MCP server; known gap:
+  no RFC 8707 resource indicators — scopes are the workaround). LangChain
+  is a post-launch example, not a launch deliverable.
+
+  Locked architecture decisions (from SPEC-REVIEW.md grilling, Aug 2026):
+  - Grant acquisition via Keycloak identity brokering + account linking
+    (kc_action=idp_link, Store Tokens on); broker imports refresh token to
+    OpenBao and owns leases, scope-down, per-agent gating, audit. Broker
+    never runs its own provider OAuth flows.
+  - Per-agent consent: user approves each agent's use of each grant;
+    approval writes the FGA tuple. FGA model uses `define can_use: [agent]`
+    (direct assignment); broker is sole tuple-writer enforcing
+    operator == grant-owner at write time (documented in threat model).
+  - Broker has its own token audience: agents exchange (RFC 8693) for
+    aud=token-broker; broker rejects any other audience.
+  - TTL honesty: Keycloak-issued tokens ≤15 min (enforced); provider tokens
+    ≤15-min re-issuance interval with per-provider residual validity table.
+  - GitHub via GitHub App (expiring user tokens, real refresh); provider
+    manifest declares supports_refresh / supports_scope_narrowing.
+  - Approval (CIBA): structured action payload registered out-of-band with
+    the approval service; binding_message carries only a reference ID
+    (Keycloak limit: ^[a-zA-Z0-9-._+/!?#]{1,50}$); trusted UI renders the
+    payload; tool API verifies executed action against approved hash and
+    rejects consumed action IDs (single-use, testable).
+  - CIBA transport: spike Keycloak's built-in HTTP authentication channel
+    (--spi-ciba-auth-channel--ciba-http-auth-channel--http-authentication-channel-uri)
+    in M0; Java SPI only as fallback.
+  - Notifications: self-hosted ntfy with ACLs, notify-only (deep link +
+    reference ID, no approval capability); decisions only in the
+    Keycloak-session-gated approval UI.
+  - Demo email via Mailpit SMTP sink; Google showcased as Drive-backed
+    ACL'd RAG corpus (FGA tuples mirror Drive permissions).
+  - SDK: Python v0, TypeScript v1 (ADR'd). MCP demo needs no client SDK.
+  - Prior art: broker is deliberately minimal; README credits Nango with a
+    comparison row. Name "prokura" verified free on npm/PyPI, no GitHub
+    collisions of substance.
+
+  Trusted computing base: Keycloak + token broker + approval service
+  (all behind compose). Threat model must state this explicitly.
+
+rules:
+  proposal:
+    - Reference SPEC.md sections and SPEC-REVIEW.md finding/question IDs
+      (F1-F9, Q1-Q7) when a decision traces to them
+  specs:
+    - Preserve the acceptance criteria from SPEC.md flows as scenarios;
+      keep them testable
+  tasks:
+    - Every milestone-sized chunk must end with a demoable artifact
