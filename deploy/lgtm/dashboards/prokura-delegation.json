@@ -502,6 +502,86 @@
      "expr": "{service_name=\"approval\"} |= \"approval_audit\""
     }
    ]
+  },
+  {
+   "id": 12,
+   "type": "stat",
+   "title": "MCP tool calls (1h)",
+   "description": "Delegation-chain actions driven through MCP tools (M4). Source: MCP server realtime audit in Loki (get_provider_token / send_email).",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 47
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "orange"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "graphMode": "area",
+    "colorMode": "value",
+    "textMode": "value"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"mcp\"} |= \"mcp_audit\" |~ \"decision=(provider_token_issued|email_sent)\" [1h]))"
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "logs",
+   "title": "MCP — live tool audit",
+   "description": "Every MCP tool decision (exchange / broker / approval_required / sent), each with a correlation id joining to the flow trace. The inbound MCP token is never forwarded downstream — each tool exchanges it first.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "h": 11,
+    "w": 18,
+    "x": 6,
+    "y": 47
+   },
+   "options": {
+    "showTime": true,
+    "wrapLogMessage": true,
+    "sortOrder": "Descending",
+    "enableLogDetails": true,
+    "dedupStrategy": "none"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "{service_name=\"mcp\"} |= \"mcp_audit\""
+    }
+   ]
   }
  ]
 }

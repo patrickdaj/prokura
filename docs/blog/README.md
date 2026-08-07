@@ -12,6 +12,8 @@ HTML file in Prokura's own visual language, with no external assets.
 | **Start here** — Foundation & Roadmap (M0) | [`index.html`](index.html) |
 | **M1** — Delegated Token Exchange | [`m1-token-exchange.html`](m1-token-exchange.html) |
 | **M2** — The Token Broker | [`m2-token-broker.html`](m2-token-broker.html) |
+| **M3** — Human Approval | [`m3-human-approval.html`](m3-human-approval.html) |
+| **M4** — MCP Authorization | [`m4-mcp-authorization.html`](m4-mcp-authorization.html) |
 
 Open any file directly in a browser. The pages cross-link with relative paths
 (the `PROKURA` wordmark returns to the M0 hub), so they work unchanged as a

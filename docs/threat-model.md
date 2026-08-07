@@ -84,16 +84,64 @@ silently widens.
   authenticated UI.
 - **Clean abort.** On denial or the 30 s CIBA timeout, the agent's poll returns an
   error, no action token is usable, and the action never runs.
-- **Known refinement — move the trigger to the resource server.** In the current
-  cut the *agent* initiates the approval ceremony and the tools-API only verifies
-  at execution. Enforcement is already server-side (the tool refuses without an
-  approved, hash-bound, single-use token), but the *trigger* depends on the agent
-  choosing to ask, which is influenceable. The intended design is reactive
-  step-up (RFC 9470-style): the agent attempts the action, the tools-API refuses
-  with an `approval_required` challenge and registers the real action itself, and
-  the agent then runs the (client-initiated) CIBA flow and retries. This moves the
-  un-bypassable trigger onto the resource server and lets the server define the
-  approved action from the actual request. Targeted for the M4 build.
+- **Trigger on the resource server (done, M4).** The approval *trigger* now lives
+  on the resource server (reactive step-up, RFC 9470-style), not on the agent. A
+  sensitive call arriving without an action token is refused with a `428`
+  `approval_required` challenge, and the tools-API itself registers the exact
+  `{action, params}` it observed with the approval service (recording the hash);
+  the agent then runs the (client-initiated) CIBA flow for that reference id and
+  retries. The un-bypassable trigger is on the server, and **the action that gets
+  approved is the one the server saw, not one the agent described**. Enforcement,
+  hash-binding, and single-use are unchanged from M3 (asserted by
+  `test_reactive_approval`) — only who initiates the ceremony moved.
+
+## MCP authorization (Flow D, M4)
+
+M4 makes the delegation chain reachable by any standard **MCP client** through
+MCP's authorization model (MCP Authorization **2025-06-18**), with **Keycloak as
+the MCP authorization server** and the Prokura **MCP server** (`services/mcp/`,
+port 8140) as an OAuth 2.1 **resource server**. The MCP server joins the TCB as
+an orchestrator: it validates inbound tokens, exchanges for downstream ones, and
+drives the broker and the gated tool on the user's behalf.
+
+- **DCR: "any client can register → consent is the gate."** So a real MCP client
+  can self-register, the realm permits **anonymous Dynamic Client Registration**
+  (RFC 7591) for clients whose redirect URIs are localhost (the Trusted Hosts
+  policy: `host-sending-registration-request-must-match=false`,
+  `client-uris-must-match=true`). The consequence is stated plainly: **any client
+  can register**. Registration grants *nothing* by itself — a freshly-registered
+  client gets an `aud=mcp-server` token and no more. Access to a user's provider
+  grants still requires **per-agent consent** (M2, the `can_use` tuple), and every
+  sensitive action still requires **human approval** (M3). Consent and approval —
+  not registration — are the gates.
+
+- **Audience binding without RFC 8707 (documented gap + workaround).** MCP expects
+  the OAuth `resource` parameter (RFC 8707) to bind a token to a specific server.
+  Keycloak does **not** reflect `resource` into the token `aud` (confirmed in the
+  M4 spike: `aud` came back `null`). The workaround, matching the M1/M2 audience
+  pattern, is the **`mcp-audience` client scope** (an `oidc-audience-mapper` →
+  `mcp-server`) made a **realm-default** scope, so every DCR-registered client
+  carries `aud=mcp-server`. The MCP server validates it (the M1 audience defense);
+  the client still sends `resource` per spec, but binding does not depend on it.
+
+- **No token passthrough.** The MCP server **never forwards the inbound MCP token**
+  downstream. For each downstream call it performs an **RFC 8693 exchange** (as the
+  confidential `mcp-server` client) into a token addressed to the specific
+  audience (`token-broker` / `agent-tools-api`). The inbound token names
+  `mcp-server` in its `aud`, which is what permits the exchange. Presenting the raw
+  MCP token to the broker is refused (wrong audience) — asserted by
+  `test_inbound_mcp_token_never_forwarded_downstream`. A token minted for the wrong
+  resource is refused at the MCP boundary too (`401` + `WWW-Authenticate` pointing
+  at the RFC 9728 metadata).
+
+- **Agent identity for consent.** The exchanged token carries `azp=mcp-server`
+  (Keycloak sets `azp` to the requesting client on exchange), so the consent
+  "agent" is **`mcp-server`** — one consent for "the MCP server acting for you."
+  This is the documented trade-off (design §3): it does not preserve the
+  individual DCR client id as a distinct consent principal, so per-MCP-client
+  consent is coarser than the "each registered client is gated separately" ideal.
+  It is honest and enforceable (the MCP server is in the TCB and is the sole
+  exchange subject); finer-grained per-DCR-client consent is a future refinement.
 
 ## Known residual risks (M2 scope)
 

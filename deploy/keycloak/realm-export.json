@@ -6,6 +6,8 @@
   "accessTokenLifespanForImplicitFlow": 900,
   "ssoSessionIdleTimeout": 1800,
   "registrationAllowed": false,
+  "defaultDefaultClientScopes": ["basic", "profile", "mcp-audience"],
+  "defaultOptionalClientScopes": ["tools:read", "tools:execute", "broker-audience", "tools-audience"],
   "eventsEnabled": true,
   "eventsExpiration": 604800,
   "adminEventsEnabled": true,
@@ -115,6 +117,23 @@
           "protocolMapper": "oidc-audience-mapper",
           "config": {
             "included.client.audience": "agent-tools-api",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mcp-audience",
+      "description": "M4 RFC 8707 workaround: Keycloak does not reflect the resource param into aud, so a realm-default client scope binds aud=mcp-server on DCR clients; the MCP server validates it (M1 defense).",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "mcp-server-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "mcp-server",
             "access.token.claim": "true"
           }
         }
@@ -342,6 +361,22 @@
       "clientAuthenticatorType": "client-secret",
       "secret": "agent-tools-api-dev-secret",
       "attributes": {}
+    },
+    {
+      "clientId": "mcp-server",
+      "name": "MCP server (M4: audience/resource + exchange subject)",
+      "description": "mcp-audience points here (aud target). Confidential + token-exchange enabled: the MCP server exchanges an inbound MCP token into a broker-/tools-audience token (azp=mcp-server), never forwarding the inbound token.",
+      "publicClient": false,
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "mcp-server-dev-secret",
+      "defaultClientScopes": ["basic", "profile"],
+      "optionalClientScopes": ["broker-audience", "tools-audience"],
+      "attributes": { "standard.token.exchange.enabled": "true" }
     }
   ]
 }

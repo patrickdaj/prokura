@@ -241,6 +241,34 @@ services:
       keycloak:
         condition: service_started
 
+  # M4: MCP server — an OAuth 2.1 resource server (RFC 9728 metadata, aud=mcp-server
+  # validation) that is also a minimal MCP server (initialize/tools/list/tools/call).
+  # Its tools drive the chain: get_provider_token (→ broker) and send_email (→
+  # tools-api, reactive approval). It exchanges (RFC 8693) the inbound MCP token for
+  # each downstream call and never forwards it. Fire-and-forget telemetry (no
+  # depends_on: lgtm).
+  mcp:
+    build: ./services/mcp
+    ports:
+      - "8140:8140"
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/prokura
+      PROKURA_REALM: prokura
+      MCP_AUDIENCE: mcp-server
+      MCP_PUBLIC_URL: http://localhost:8140
+      MCP_CLIENT_ID: mcp-server
+      MCP_CLIENT_SECRET: mcp-server-dev-secret
+      BROKER_URL: http://token-broker:8110
+      BROKER_AUDIENCE: token-broker
+      TOOLS_URL: http://tools-api:8130
+      TOOLS_AUDIENCE: agent-tools-api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
+      OTEL_SERVICE_NAME: mcp
+    depends_on:
+      keycloak:
+        condition: service_started
+
   # M0 spike (F6-A): receives Keycloak's CIBA delegation POSTs and returns
   # decisions on Keycloak's callback endpoint. Profile-gated; enable with
   #   docker compose --profile spike up -d

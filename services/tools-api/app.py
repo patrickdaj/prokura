@@ -6,6 +6,13 @@ approval service's /consume endpoint (human-approval spec, F8-A).
 The action is gated twice: the bearer must be addressed to this resource
 (aud=agent-tools-api — the M1 defense), AND the presented action token must map
 to an approved, unconsumed reference whose hash matches this exact action.
+
+Reactive approval (M4): the approval **trigger** lives here, not on the agent. A
+call arriving WITHOUT an action_token is refused with a `428` `approval_required`
+challenge — and the tools-API itself registers the exact `{action, params}` it
+observed with the approval service, returning the reference id + action token for
+the agent to drive CIBA and retry. The action that gets approved is the one this
+server saw, never one the agent described.
 """
 
 import os
@@ -56,6 +63,24 @@ async def email_send(request: Request, authorization: str | None = Header(defaul
     params = {k: body.get(k) for k in ("to", "subject", "body")}
     if not all(params.values()):
         raise _Http(400, "to, subject, body required")
+
+    # Reactive approval (M4): no action token means the agent has not (yet) been
+    # approved. The trigger is HERE, not on the agent — we register the exact
+    # action we observed with the approval service and challenge with 428. The
+    # agent drives CIBA for this ref and retries with the returned action token.
+    if not action_token:
+        with tracer().start_as_current_span("approval.register") as span:
+            span.set_attribute("prokura.action", "email.send")
+            reg = httpx.post(f"{config.APPROVAL_URL}/register",
+                             headers={"Authorization": authorization},
+                             json={"action": "email.send", "params": params}, timeout=10.0)
+        if reg.status_code != 200:
+            raise _Http(502, f"approval registration failed: {reg.status_code}")
+        j = reg.json()
+        # 428 Precondition Required: the request must first satisfy the human-approval
+        # precondition. The action that will be approved is the one registered above.
+        return JSONResponse({"error": "approval_required", "ref": j["ref"],
+                             "action_token": j["action_token"]}, status_code=428)
 
     # Verify hash + single-use against the approval service. This is the gate:
     # the action must match exactly what the human approved, and be unconsumed.

@@ -1,0 +1,401 @@
+<meta charset="utf-8">
+<title>Prokura — M4: MCP Authorization</title>
+<style>
+  :root{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+      --ink:#10151c; --muted:#566372; --faint:#8794a2;
+      --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+  }
+  :root[data-theme="light"]{
+    --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+    --ink:#10151c; --muted:#566372; --faint:#8794a2;
+    --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16.5px; line-height:1.62;
+    background-image:radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 62%);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+
+  /* ---- progress rail ---- */
+  .rail{border-bottom:1px solid var(--hair); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter:blur(8px);}
+  .rail .wrap{display:flex; align-items:center; justify-content:space-between; height:56px;}
+  .mark{font-family:var(--sans); font-weight:600; letter-spacing:.42em; font-size:13px; color:var(--ink);}
+  .steps{display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;}
+  .steps span{color:var(--faint);}
+  .steps .cur{color:var(--accent);}
+  .steps .done{color:var(--muted);}
+  .steps i{color:var(--faint); font-style:normal;}
+
+  /* ---- hero ---- */
+  .hero{padding:70px 0 34px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 18px;}
+  h1{font-size:clamp(34px,6vw,52px); line-height:1.04; letter-spacing:-.02em; font-weight:640; margin:0 0 20px; text-wrap:balance;}
+  .thesis{font-size:20px; line-height:1.5; color:var(--muted); margin:0; max-width:64ch; text-wrap:pretty;}
+  .thesis b{color:var(--ink); font-weight:600;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px; font-family:var(--mono); font-size:12px;}
+  .chip{border:1px solid var(--border); border-radius:999px; padding:4px 11px; color:var(--muted); letter-spacing:.03em;}
+  .chip.status{border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); color:var(--ok);}
+  .chip.status::before{content:"●"; margin-right:6px; font-size:9px; vertical-align:1px;}
+
+  /* ---- sections ---- */
+  section{padding:34px 0;}
+  .kicker{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 6px;}
+  h2{font-size:26px; letter-spacing:-.01em; font-weight:620; margin:0 0 16px; text-wrap:balance;}
+  h3{font-size:16px; margin:0 0 6px; font-weight:620;}
+  p{margin:0 0 15px;}
+  .lead{color:var(--muted);}
+  hr{border:0; border-top:1px solid var(--hair); margin:0;}
+
+  /* ---- numbers ---- */
+  .nums{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .nums div{background:var(--panel); padding:18px 16px;}
+  .nums .n{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .nums .l{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;}
+  @media(max-width:620px){ .nums{grid-template-columns:repeat(2,1fr);} }
+
+  /* ---- architecture diagram ---- */
+  .diagram{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:26px 22px 20px;}
+  .flowrow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap;}
+  .node{flex:1 1 0; min-width:120px; background:var(--panel2); border:1px solid var(--border); border-radius:11px;
+    padding:12px 13px; position:relative;}
+  .node .t{font-weight:620; font-size:13.5px;}
+  .node .s{font-family:var(--mono); font-size:11px; color:var(--faint); margin-top:2px; letter-spacing:.02em;}
+  .node.trust{border-color:color-mix(in srgb,var(--accent) 40%,var(--border)); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 16%,transparent) inset;}
+  .arrow{align-self:center; color:var(--faint); font-family:var(--mono); padding:0 6px; font-size:15px;}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; font-family:var(--mono); font-size:11.5px; color:var(--muted);}
+  .legend span::before{content:"■"; margin-right:6px;}
+  .legend .tcb::before{color:var(--accent);}
+  .legend .ext::before{color:var(--faint);}
+  .caption{font-family:var(--mono); font-size:11.5px; color:var(--faint); margin-top:14px; letter-spacing:.02em; text-align:center;}
+
+  /* ---- ledger (numbered sequence) ---- */
+  .ledger{border-top:1px solid var(--hair);}
+  .entry{display:grid; grid-template-columns:44px 1fr; gap:18px; padding:20px 0; border-bottom:1px solid var(--hair);}
+  .entry .idx{font-family:var(--mono); font-size:13px; color:var(--accent); padding-top:2px; letter-spacing:.02em;}
+  .entry h3{margin-bottom:4px;}
+  .entry p{margin:0; color:var(--muted); font-size:15px;}
+  .entry code, code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2); border:1px solid var(--hair);
+    border-radius:5px; padding:1px 5px; color:var(--ink);}
+  .gate{display:inline-block; font-family:var(--mono); font-size:11px; color:var(--ok); border:1px solid color-mix(in srgb,var(--ok) 40%,var(--border));
+    border-radius:5px; padding:0 6px; margin-right:5px; letter-spacing:.02em;}
+
+  /* ---- decisions register ---- */
+  .reg{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .reg .row{background:var(--panel); padding:18px 20px;}
+  .reg .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:7px; display:inline-block;}
+  .tag.learn{color:var(--learn);}
+  .tag.dec{color:var(--accent);}
+  .reg h3{font-size:15.5px; margin-bottom:5px;}
+  .reg p{margin:0; font-size:14.5px; color:var(--muted);}
+
+  /* ---- "seeing it work": discovery card + audit ---- */
+  .show{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media(max-width:720px){ .show{grid-template-columns:1fr;} }
+  .frame{background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; display:flex; flex-direction:column;}
+  .frame .bar{display:flex; align-items:center; gap:7px; padding:9px 13px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--border);}
+  .frame .cap{padding:11px 14px; border-top:1px solid var(--hair); font-size:12.5px; color:var(--muted);}
+
+  /* discovery recreation */
+  .disc{padding:16px 16px; font-family:var(--mono); font-size:11.5px; line-height:1.65; overflow-x:auto;}
+  .disc .h{color:var(--bad);} .disc .k{color:var(--accent);} .disc .v{color:var(--ink);} .disc .c{color:var(--faint);} .disc .g{color:var(--ok);}
+  .disc pre{margin:0; white-space:pre;}
+
+  /* audit stream */
+  .stream{padding:6px 0; font-family:var(--mono); font-size:11px; line-height:1.5; overflow-x:auto;}
+  .stream .ln{padding:6px 14px; border-bottom:1px solid var(--hair); white-space:nowrap;}
+  .stream .ln:last-child{border-bottom:0;}
+  .stream .tag2{background:color-mix(in srgb,var(--learn) 22%,transparent); color:var(--learn); border-radius:3px; padding:0 4px;}
+  .stream .iss{color:var(--ok);} .stream .den{color:var(--bad);} .stream .dim{color:var(--faint);} .stream .id{color:var(--accent);}
+
+  /* verify list */
+  .checks{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+  .checks li{display:grid; grid-template-columns:20px 1fr; gap:12px; font-size:15px; color:var(--muted);}
+  .checks .ck{color:var(--ok); font-weight:700;}
+  .checks b{color:var(--ink); font-weight:600;}
+
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 18px; color:var(--muted); font-size:15px;}
+  .callout b{color:var(--ink);}
+
+  footer{border-top:1px solid var(--hair); padding:34px 0 60px; color:var(--faint); font-size:13px;}
+  .nextlink{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--hair); margin-bottom:22px; flex-wrap:wrap;}
+  .nextlink .lab{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+  .nextlink a{font-size:19px; font-weight:600;}
+  .paths{font-family:var(--mono); font-size:12px; color:var(--faint); line-height:1.8;}
+  .term{background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;}
+  .term .bar{padding:9px 14px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
+  .term pre{margin:0; padding:15px 17px; font-family:var(--mono); font-size:12.5px; line-height:1.8; color:var(--ink); overflow-x:auto; white-space:pre;}
+  .term .p{color:var(--accent);} .term .c{color:var(--faint);} .term .o{color:var(--muted);}
+
+  /* sequence-diagram component (the flow-diagram norm) */
+  .seq{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px 14px 12px;overflow-x:auto;margin-bottom:22px;}
+  .seq svg{display:block;margin:0 auto;}
+  .seqcap{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:center;margin-top:12px;letter-spacing:.02em;}
+  .seqla{stroke:var(--accent);stroke-width:1.6;fill:none;}
+  .seqlm{stroke:var(--muted);stroke-width:1.4;fill:none;stroke-dasharray:5 4;}
+  .seqta{fill:var(--accent);stroke:none;} .seqtm{fill:var(--muted);stroke:none;}
+  .seqlife{stroke:var(--hair);stroke-width:1;fill:none;stroke-dasharray:3 5;}
+  .seqhdr{fill:var(--panel2);stroke:var(--border);}
+  .seqact{fill:var(--ink);font-family:var(--sans);font-size:12px;font-weight:600;}
+  .seqsub{fill:var(--faint);font-family:var(--mono);font-size:9.5px;}
+  .seqtxt{fill:var(--muted);font-family:var(--sans);font-size:12px;}
+  .seqtxt.r{fill:var(--faint);}
+  .seqnote{fill:var(--faint);font-family:var(--mono);font-size:10px;}
+  .seqnumc{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1;}
+  .seqnum{fill:var(--accent);font-family:var(--mono);font-size:10px;font-weight:600;}
+</style>
+
+<div class="rail"><div class="wrap">
+  <a class="mark" href="index.html" style="text-decoration:none">PROKURA</a>
+  <div class="steps"><a class="done" href="index.html" style="text-decoration:none">M0</a><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><a class="done" href="m3-human-approval.html" style="text-decoration:none">M3</a><i>·</i><span class="cur">M4</span></div>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Milestone 04 · Build log</p>
+    <h1>An authorization server a real agent connects to</h1>
+    <p class="thesis">M0–M3 built the whole delegation chain, but a <i>library</i> drove it. M4 makes it reachable by <b>any standard MCP client</b> — it <b>discovers</b> the server, <b>registers itself</b>, <b>logs the user in</b>, and then, through MCP tools, obtains a <b>brokered provider token</b> and performs a <b>human-approved action</b>. Keycloak becomes the <b>MCP authorization server</b>; the trigger for approval moves onto the resource server.</p>
+    <div class="meta">
+      <span class="chip status">Shipped · 2026-08-07</span>
+      <span class="chip">mcp-authorization</span>
+      <span class="chip">MCP 2025-06-18</span>
+      <span class="chip">RFC 9728 · 8414 · 7591</span>
+    </div>
+  </header>
+  <hr>
+  <section>
+    <p class="lead">This is the headline. So far every flow was driven by Prokura's Python SDK and the test harness. M4 is where Prokura stops being "a library you call" and becomes "an <b>authorization server</b> a real agent connects to." The client is standard MCP: it hits a <code>401</code>, follows the pointer to protected-resource metadata, finds Keycloak, <b>registers dynamically</b>, runs <b>OAuth 2.1 + PKCE</b>, and calls tools — the exact handshake Claude and other MCP clients use.</p>
+    <p class="lead">With dynamic registration on, the security story becomes explicit: <b>any client can register</b>. Registration by itself grants nothing — <b>per-agent consent</b> (M2) gates provider access and <b>human approval</b> (M3) gates sensitive actions. Consent and approval, not registration, are the gates.</p>
+  </section>
+
+  <section>
+    <p class="kicker">By the numbers</p>
+    <div class="nums">
+      <div><div class="n">11</div><div class="l">new MCP smoke tests — discovery, DCR, OAuth, the chain, reactive negatives</div></div>
+      <div><div class="n">2025-06-18</div><div class="l">the MCP Authorization spec revision, verified against the running image</div></div>
+      <div><div class="n">0</div><div class="l">inbound MCP tokens forwarded downstream — each is exchanged first</div></div>
+      <div><div class="n">any</div><div class="l">client can register (DCR) — so consent is the gate, by design</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The shape of it</p>
+    <h2>The MCP server wears two hats</h2>
+    <p class="lead">One new service joins the stack. The <b>MCP server</b> is an OAuth 2.1 <b>resource server</b> — it publishes RFC 9728 metadata, challenges unauthenticated requests, and validates the token audience — <i>and</i> a minimal <b>MCP server</b> whose tools drive the chain. Keycloak is the <b>authorization server</b>: it serves RFC 8414 metadata and permits RFC 7591 dynamic registration.</p>
+    <div class="diagram">
+      <div class="flowrow">
+        <div class="node"><div class="t">MCP client</div><div class="s">discover · DCR · PKCE</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">MCP server</div><div class="s">RFC 9728 · aud check</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">Keycloak</div><div class="s">MCP AS · DCR · exchange</div></div>
+      </div>
+      <div class="flowrow" style="margin-top:12px;">
+        <div class="node trust"><div class="t">Token Broker</div><div class="s">consent-gated</div></div>
+        <div class="arrow">←</div>
+        <div class="node trust"><div class="t">MCP server</div><div class="s">RFC 8693 exchange</div></div>
+        <div class="arrow">→</div>
+        <div class="node trust"><div class="t">Tools-API</div><div class="s">reactive approval</div></div>
+      </div>
+      <div class="legend"><span class="tcb">Trusted computing base</span><span class="ext">Untrusted client</span></div>
+      <div class="caption">The MCP server never forwards the inbound token; for each downstream call it exchanges it for a correctly-audienced one.</div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">How it works</p>
+    <h2>From a cold 401 to a human-approved send</h2>
+    <div class="seq" id="flow"></div>
+    <div class="ledger">
+      <div class="entry"><div class="idx">01</div><div>
+        <h3>Discover, then register</h3>
+        <p>An unauthenticated <code>POST /mcp</code> returns <code>401</code> with <code>WWW-Authenticate: Bearer resource_metadata="…"</code>. The client fetches that <b>RFC 9728</b> document, finds the Keycloak realm named as its authorization server, and <b>registers dynamically</b> (RFC 7591) — a client id with no operator in the loop.</p>
+      </div></div>
+      <div class="entry"><div class="idx">02</div><div>
+        <h3>Log in with OAuth 2.1 + PKCE</h3>
+        <p>The client runs the authorization-code flow with PKCE and the RFC 8707 <code>resource</code> parameter. Keycloak doesn't reflect <code>resource</code> into the audience (a real gap) — so a <b>realm-default client scope binds <code>aud=mcp-server</code></b> instead. The MCP server validates it; a wrong-audience token is challenged, not served.</p>
+      </div></div>
+      <div class="entry"><div class="idx">03</div><div>
+        <h3>A tool call drives the chain — without passthrough</h3>
+        <p>On <code>tools/call</code>, the MCP server <b>exchanges</b> the inbound token (RFC 8693, as the confidential <code>mcp-server</code> client) for a broker- or tools-audience token. The inbound MCP token is <b>never forwarded</b>. <code>get_provider_token</code> reaches the broker (consent-gated); <code>send_email</code> reaches the gated action.</p>
+      </div></div>
+      <div class="entry"><div class="idx">04</div><div>
+        <h3>The resource server demands approval</h3>
+        <p>The first <code>send_email</code> arrives with no action token. Instead of running, the tools-API <b>registers the exact action it observed</b> and refuses with a <code>428 approval_required</code> challenge. The client drives CIBA for that reference, a human approves what the server stored, and the retry executes <b>once</b>.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Decisions &amp; what we learned</p>
+    <h2>Where the standard met the implementation</h2>
+    <div class="reg">
+      <div class="row"><span class="tag dec">Decision</span><h3>Keycloak <i>is</i> the MCP authorization server</h3><p>RFC 8414 metadata already worked; anonymous DCR was blocked only by the Trusted Hosts policy. We opened it for localhost redirect URIs (which OAuth 2.1 requires anyway) and baked the policy into the realm — so a real MCP client registers with no operator involvement.</p></div>
+      <div class="row"><span class="tag learn">Learned</span><h3>The RFC 8707 <code>resource</code> parameter is not reflected into <code>aud</code></h3><p>The spike confirmed it against the running image: the audience came back <code>null</code>. So we bound audience the M1/M2 way — an <code>mcp-audience</code> client scope (an audience mapper), made a <b>realm default</b> so every DCR client carries <code>aud=mcp-server</code>. The client still sends <code>resource</code> per spec; binding just doesn't depend on it.</p></div>
+      <div class="row"><span class="tag dec">Decision</span><h3>Never forward the inbound token — exchange for every hop</h3><p>The MCP server holds an <code>aud=mcp-server</code> token and needs <code>aud=token-broker</code> / <code>aud=agent-tools-api</code> downstream. It exchanges (RFC 8693) as its own confidential client. Presenting the raw MCP token to the broker is refused — proof the passthrough never happens.</p></div>
+      <div class="row"><span class="tag learn">Learned</span><h3>The approval trigger belongs on the resource server</h3><p>M3 left the <i>trigger</i> with the agent. M4 moves it: the tools-API refuses an un-approved call with a <code>428</code> and registers the action it actually saw. The agent identity for consent is the <code>mcp-server</code> client (exchange sets <code>azp</code> to the requester) — an honest, documented trade-off over per-DCR-client consent.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Seeing it work</p>
+    <h2>The discovery challenge and the tool audit</h2>
+    <p class="lead">On the left, the actual cold-start: a <code>401</code> pointing at RFC 9728 metadata that names Keycloak as the authorization server. On the right, the MCP server's realtime audit — each tool decision carrying a correlation id that joins to the flow trace. Both are recreated from the real running system.</p>
+    <div class="show">
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">:8140/mcp · cold start</span></div>
+        <div class="disc"><pre><span class="c"># POST /mcp with no token</span>
+<span class="h">HTTP/1.1 401 Unauthorized</span>
+<span class="k">WWW-Authenticate:</span> <span class="v">Bearer</span>
+  <span class="v">resource_metadata=</span>
+  <span class="v">"…/.well-known/oauth-protected-resource"</span>
+
+<span class="c"># GET that document (RFC 9728)</span>
+{
+  <span class="k">"resource"</span>: <span class="v">"http://localhost:8140/mcp"</span>,
+  <span class="k">"authorization_servers"</span>: [
+    <span class="g">"…/realms/prokura"</span>
+  ]
+}</pre></div>
+        <div class="cap">The client follows the pointer to Keycloak, then registers (RFC 7591) and logs in.</div>
+      </div>
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">Grafana · MCP tool audit</span></div>
+        <div class="stream">
+          <div class="ln"><span class="dim">11:46</span> <span class="tag2">mcp_audit</span> <span class="id">id=471a…5d68</span> <span class="iss">provider_token_issued</span> agent=mcp-server tool=get_provider_token</div>
+          <div class="ln"><span class="dim">11:46</span> <span class="tag2">mcp_audit</span> <span class="id">id=6584…d03e</span> approval_required agent=mcp-server tool=send_email ref=apr-c5fe…0093</div>
+          <div class="ln"><span class="dim">11:46</span> <span class="tag2">mcp_audit</span> <span class="id">id=4ee2…9133</span> <span class="iss">email_sent</span> agent=mcp-server tool=send_email to=boss@…</div>
+          <div class="ln"><span class="dim">11:48</span> <span class="tag2">mcp_audit</span> <span class="id">id=b3bf…9498</span> <span class="iss">provider_token_issued</span> agent=mcp-server tool=get_provider_token</div>
+          <div class="ln"><span class="dim">11:48</span> <span class="tag2">mcp_audit</span> <span class="id">id=632a…c17e</span> <span class="iss">email_sent</span> agent=mcp-server tool=send_email to=boss@…</div>
+        </div>
+        <div class="cap">Real event shapes. The <code>id</code> is the trace id — the same flow spans mcp → keycloak → tools-api → approval in Tempo.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Run it yourself</p>
+    <h2>Drive the whole chain as a real MCP client would</h2>
+    <p class="lead">The tests are a scripted, spec-compliant MCP client: discover → register → OAuth 2.1 + PKCE → tools/list → a consent-gated brokered token → a reactive, human-approved send. A real client uses the same standard steps.</p>
+    <div class="term">
+      <div class="bar">your shell · repo root · stack up, venv active (see M0 / M1)</div>
+<pre><span class="p">$</span> docker compose up -d
+
+<span class="c"># discovery (401 -> PRM -> AS metadata) -> DCR -> OAuth 2.1 + PKCE</span>
+<span class="c"># -> aud=mcp-server -> tools/list; wrong-audience token refused</span>
+<span class="p">$</span> pytest tests/smoke/test_mcp_authorization.py -v
+
+<span class="c"># through MCP tools: a brokered provider token, then a reactive</span>
+<span class="c"># challenge -> CIBA -> approve -> retry -> mail in Mailpit</span>
+<span class="p">$</span> pytest tests/smoke/test_mcp_chain.py \
+         tests/smoke/test_reactive_approval.py -v
+
+<span class="c"># the MCP row on the delegation dashboard</span>
+<span class="p">$</span> open http://localhost:3001/d/prokura-delegation</pre>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Verified by looking</p>
+    <h2>What we confirmed</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>A cold <code>POST /mcp</code> returns <b>401 + resource_metadata</b>, and that RFC 9728 document <b>names Keycloak</b> as the authorization server.</span></li>
+      <li><span class="ck">✓</span><span>A <b>dynamically-registered</b> client completes OAuth 2.1 + PKCE and its token carries <b><code>aud=mcp-server</code></b>; a <b>wrong-audience token is refused</b> at the MCP boundary.</span></li>
+      <li><span class="ck">✓</span><span>Through MCP tools, a <b>consent-gated brokered token</b> is returned and a <b>human-approved email lands in Mailpit</b> — the reactive challenge → CIBA → retry path.</span></li>
+      <li><span class="ck">✓</span><span>The <b>inbound MCP token is refused downstream</b> — it is never forwarded; each hop is a fresh RFC 8693 exchange.</span></li>
+      <li><span class="ck">✓</span><span>The flow is <b>one linked trace</b> (mcp → keycloak → tools-api → approval) with the same correlation id in <b>live Loki audit</b> and on the dashboard's MCP row.</span></li>
+    </ul>
+    <p style="margin-top:22px"></p>
+    <div class="callout"><b>What's next.</b> M5 turns to fine-grained authorization on the data an agent can see — relationship-based filtering (OpenFGA) so a tool returns only the records the user may actually reach.</div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Previous milestone</div><a href="m3-human-approval.html">← M3 · Human Approval</a></div>
+      <div style="text-align:right"><div class="lab">Status</div><span style="color:var(--ok)">Shipped &amp; archived</span></div>
+    </div>
+    <div class="paths">
+      services/mcp/ &nbsp;·&nbsp; OAuth 2.1 resource server (RFC 9728) + minimal MCP server; RFC 8693 exchange, no passthrough<br>
+      deploy/keycloak/realm-export.json &nbsp;·&nbsp; DCR policy, mcp-server client, mcp-audience default scope<br>
+      services/tools-api/ &nbsp;·&nbsp; reactive approval_required (428) challenge<br>
+      sdk/prokura-py/prokura/approval.py &nbsp;·&nbsp; drive_ciba_approval()<br>
+      tests/smoke/test_mcp_{authorization,chain}.py · test_reactive_approval.py<br>
+      openspec/changes/archive/2026-08-07-add-mcp-authorization/ &nbsp;·&nbsp; proposal · design · specs · tasks
+    </div>
+  </footer>
+</div>
+<script>
+function renderSeq(el, actors, steps, caption){
+  const NS="http://www.w3.org/2000/svg";
+  const N=actors.length, padX=78, numCol=30;
+  const W=Math.max(680, 120+(N-1)*Math.max(120,560/(N-1||1)));
+  const colW=(W-numCol-padX)/(N-1||1);
+  const X=i=>numCol+padX/2+i*colW;
+  const top=6, hdrH=30, lifeTop=top+hdrH+8, startY=lifeTop+30, rowH=46;
+  const H=startY+steps.length*rowH+6;
+  const idx=id=>actors.findIndex(a=>a.id===id);
+  const mk=(t,a,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e;};
+  const svg=mk("svg",{viewBox:"0 0 "+W+" "+H,width:W,style:"max-width:100%;height:auto"});
+  actors.forEach((a,i)=>{const cx=X(i);
+    svg.append(mk("rect",{x:cx-52,y:top,width:104,height:hdrH,rx:8,class:"seqhdr"}));
+    svg.append(mk("text",{x:cx,y:top+(a.sub?12:19),"text-anchor":"middle",class:"seqact"},a.label));
+    if(a.sub) svg.append(mk("text",{x:cx,y:top+24,"text-anchor":"middle",class:"seqsub"},a.sub));
+    svg.append(mk("line",{x1:cx,y1:lifeTop,x2:cx,y2:H-6,class:"seqlife"}));});
+  steps.forEach((s,i)=>{const y=startY+i*rowH, x1=X(idx(s.from)), x2=X(idx(s.to));
+    const line=s.ret?"seqlm":"seqla", head=s.ret?"seqtm":"seqta";
+    svg.append(mk("circle",{cx:15,cy:y,r:9,class:"seqnumc"}));
+    svg.append(mk("text",{x:15,y:y+3.5,"text-anchor":"middle",class:"seqnum"},i+1));
+    if(s.from===s.to){const w=46, left=idx(s.from)>=N-1, dx=left?-1:1;
+      svg.append(mk("path",{d:"M "+x1+" "+(y-8)+" h "+(dx*w)+" v 16 h "+(-dx*w),class:line}));
+      svg.append(mk("path",{d:"M "+(x1+dx*7)+" "+(y+3)+" l "+(-dx*7)+" 5 l "+(dx*7)+" 5 z",class:head}));
+      svg.append(mk("text",{x:x1+dx*(w+8),y:y+4,"text-anchor":left?"end":"start",class:"seqtxt"+(s.ret?" r":"")},s.t));
+    } else {const dir=x2>x1?1:-1, ex=x2-dir*7;
+      svg.append(mk("line",{x1:x1,y1:y,x2:ex,y2:y,class:line}));
+      svg.append(mk("path",{d:"M "+x2+" "+y+" l "+(-dir*8)+" -5 v 10 z",class:head}));
+      svg.append(mk("text",{x:(x1+x2)/2,y:y-7,"text-anchor":"middle",class:"seqtxt"+(s.ret?" r":"")},s.t));
+      if(s.n) svg.append(mk("text",{x:(x1+x2)/2,y:y+12,"text-anchor":"middle",class:"seqnote"},s.n));}});
+  el.append(svg);
+  if(caption){const c=document.createElement("div");c.className="seqcap";c.textContent=caption;el.append(c);}
+}
+renderSeq(document.getElementById("flow"),
+  [{id:"client",label:"MCP client"},{id:"mcp",label:"MCP server",sub:"resource"},{id:"kc",label:"Keycloak",sub:"MCP AS"},{id:"tools",label:"Tools-API"},{id:"human",label:"Human"}],
+  [
+    {from:"client",to:"mcp",t:"POST /mcp · no token"},
+    {from:"mcp",to:"client",t:"401 · resource_metadata=…",ret:true,n:"RFC 9728 → Keycloak AS"},
+    {from:"client",to:"kc",t:"DCR + OAuth 2.1/PKCE",n:"resource=…/mcp"},
+    {from:"kc",to:"client",t:"token · aud=mcp-server",ret:true,n:"bound by mcp-audience scope"},
+    {from:"client",to:"mcp",t:"tools/call send_email"},
+    {from:"mcp",to:"kc",t:"RFC 8693 exchange → tools-audience"},
+    {from:"mcp",to:"tools",t:"email.send · no action token"},
+    {from:"tools",to:"mcp",t:"428 approval_required + ref",ret:true,n:"trigger on the server"},
+    {from:"mcp",to:"client",t:"approval_required + ref",ret:true},
+    {from:"client",to:"kc",t:"CIBA binding_message=ref · human approves"},
+    {from:"client",to:"mcp",t:"tools/call send_email + action_token"},
+    {from:"mcp",to:"tools",t:"exchanged token → sent once"}
+   ],
+  'Discover → register → log in → drive tools. The inbound token is exchanged, never forwarded; approval is demanded by the server.');
+</script>

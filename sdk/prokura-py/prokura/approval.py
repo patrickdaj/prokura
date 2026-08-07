@@ -41,6 +41,74 @@ def _preferred_username(token: str) -> str:
     return json.loads(base64.urlsafe_b64decode(seg)).get("preferred_username", "")
 
 
+def _poll_ciba(c: httpx.Client, token_url: str, auth_req_id: str, interval: int,
+               client_id: str, client_secret: str, action: str) -> str:
+    """Poll the CIBA token endpoint to completion; return the CIBA access token or
+    raise ApprovalDenied / ApprovalTimeout / ApprovalError."""
+    while True:  # Keycloak's expiry surfaces as an expired_token error
+        tr = c.post(token_url, data={"grant_type": _CIBA_GRANT, "auth_req_id": auth_req_id,
+                    "client_id": client_id, "client_secret": client_secret})
+        if tr.status_code == 200:
+            return tr.json()["access_token"]
+        try:
+            err = tr.json().get("error", "")
+        except ValueError:
+            err = tr.text[:120]
+        if err in ("authorization_pending", "slow_down"):
+            time.sleep(interval)
+            continue
+        if err == "access_denied":
+            raise ApprovalDenied(f"action {action!r} denied")
+        if err in ("expired_token", "invalid_grant"):
+            raise ApprovalTimeout(f"approval for {action!r} expired")
+        raise ApprovalError(f"ciba poll failed: {err}")
+
+
+def drive_ciba_approval(
+    ref: str,
+    *,
+    base_url: str,
+    realm: str,
+    client_id: str,
+    client_secret: str,
+    login_hint: str,
+    scopes: Iterable[str] = (),
+    requested_expiry: int | None = None,
+    action: str = "action",
+    http: httpx.Client | None = None,
+) -> str:
+    """Reactive-approval counterpart of ``require_approval`` (M4).
+
+    When a resource server refuses a sensitive call with an ``approval_required``
+    challenge, it has ALREADY registered the real action and returned a reference
+    id. The agent does not register anything — it simply drives the
+    (client-initiated) CIBA ceremony for that ``ref`` (as the binding message),
+    waits for the human's decision, and then retries the action with the
+    challenge's action token. Returns the CIBA access token on approval; raises
+    ApprovalDenied / ApprovalTimeout / ApprovalError otherwise."""
+    owns = http is None
+    c = http or httpx.Client(timeout=20.0)
+    try:
+        scope = " ".join(["openid", "tools-audience", *scopes])
+        data = {"client_id": client_id, "client_secret": client_secret,
+                "scope": scope, "login_hint": login_hint, "binding_message": ref}
+        if requested_expiry:
+            data["requested_expiry"] = str(requested_expiry)
+        auth = c.post(f"{base_url}/realms/{realm}/protocol/openid-connect/ext/ciba/auth",
+                      data=data)
+        if auth.status_code != 200:
+            raise ApprovalError(f"ciba initiation failed ({auth.status_code})")
+        aj = auth.json()
+        return _poll_ciba(c, f"{base_url}/realms/{realm}/protocol/openid-connect/token",
+                          aj["auth_req_id"], aj.get("interval", 5),
+                          client_id, client_secret, action)
+    except httpx.HTTPError as e:
+        raise ApprovalError(f"approval endpoint unreachable: {e}") from e
+    finally:
+        if owns:
+            c.close()
+
+
 def require_approval(
     subject_token: str,
     action: str,
