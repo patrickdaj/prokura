@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Prokura — M3: Human Approval</title>
 <style>
   :root{
@@ -158,6 +159,23 @@
   .term .bar{padding:9px 14px; border-bottom:1px solid var(--hair); font-family:var(--mono); font-size:11px; color:var(--faint);}
   .term pre{margin:0; padding:15px 17px; font-family:var(--mono); font-size:12.5px; line-height:1.8; color:var(--ink); overflow-x:auto; white-space:pre;}
   .term .p{color:var(--accent);} .term .c{color:var(--faint);} .term .o{color:var(--muted);}
+
+  /* sequence-diagram component (the flow-diagram norm) */
+  .seq{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px 14px 12px;overflow-x:auto;margin-bottom:22px;}
+  .seq svg{display:block;margin:0 auto;}
+  .seqcap{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:center;margin-top:12px;letter-spacing:.02em;}
+  .seqla{stroke:var(--accent);stroke-width:1.6;fill:none;}
+  .seqlm{stroke:var(--muted);stroke-width:1.4;fill:none;stroke-dasharray:5 4;}
+  .seqta{fill:var(--accent);stroke:none;} .seqtm{fill:var(--muted);stroke:none;}
+  .seqlife{stroke:var(--hair);stroke-width:1;fill:none;stroke-dasharray:3 5;}
+  .seqhdr{fill:var(--panel2);stroke:var(--border);}
+  .seqact{fill:var(--ink);font-family:var(--sans);font-size:12px;font-weight:600;}
+  .seqsub{fill:var(--faint);font-family:var(--mono);font-size:9.5px;}
+  .seqtxt{fill:var(--muted);font-family:var(--sans);font-size:12px;}
+  .seqtxt.r{fill:var(--faint);}
+  .seqnote{fill:var(--faint);font-family:var(--mono);font-size:10px;}
+  .seqnumc{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1;}
+  .seqnum{fill:var(--accent);font-family:var(--mono);font-size:10px;font-weight:600;}
 </style>
 
 <div class="rail"><div class="wrap">
@@ -220,6 +238,7 @@
   <section>
     <p class="kicker">How it works</p>
     <h2>From "please send this" to "sent, once"</h2>
+    <div class="seq" id="flow"></div>
     <div class="ledger">
       <div class="entry"><div class="idx">01</div><div>
         <h3>Register the exact action</h3>
@@ -330,3 +349,54 @@
     </div>
   </footer>
 </div>
+<script>
+function renderSeq(el, actors, steps, caption){
+  const NS="http://www.w3.org/2000/svg";
+  const N=actors.length, padX=78, numCol=30;
+  const W=Math.max(680, 120+(N-1)*Math.max(120,560/(N-1||1)));
+  const colW=(W-numCol-padX)/(N-1||1);
+  const X=i=>numCol+padX/2+i*colW;
+  const top=6, hdrH=30, lifeTop=top+hdrH+8, startY=lifeTop+30, rowH=46;
+  const H=startY+steps.length*rowH+6;
+  const idx=id=>actors.findIndex(a=>a.id===id);
+  const mk=(t,a,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e;};
+  const svg=mk("svg",{viewBox:"0 0 "+W+" "+H,width:W,style:"max-width:100%;height:auto"});
+  actors.forEach((a,i)=>{const cx=X(i);
+    svg.append(mk("rect",{x:cx-52,y:top,width:104,height:hdrH,rx:8,class:"seqhdr"}));
+    svg.append(mk("text",{x:cx,y:top+(a.sub?12:19),"text-anchor":"middle",class:"seqact"},a.label));
+    if(a.sub) svg.append(mk("text",{x:cx,y:top+24,"text-anchor":"middle",class:"seqsub"},a.sub));
+    svg.append(mk("line",{x1:cx,y1:lifeTop,x2:cx,y2:H-6,class:"seqlife"}));});
+  steps.forEach((s,i)=>{const y=startY+i*rowH, x1=X(idx(s.from)), x2=X(idx(s.to));
+    const line=s.ret?"seqlm":"seqla", head=s.ret?"seqtm":"seqta";
+    svg.append(mk("circle",{cx:15,cy:y,r:9,class:"seqnumc"}));
+    svg.append(mk("text",{x:15,y:y+3.5,"text-anchor":"middle",class:"seqnum"},i+1));
+    if(s.from===s.to){const w=46, left=idx(s.from)>=N-1, dx=left?-1:1;
+      svg.append(mk("path",{d:"M "+x1+" "+(y-8)+" h "+(dx*w)+" v 16 h "+(-dx*w),class:line}));
+      svg.append(mk("path",{d:"M "+(x1+dx*7)+" "+(y+3)+" l "+(-dx*7)+" 5 l "+(dx*7)+" 5 z",class:head}));
+      svg.append(mk("text",{x:x1+dx*(w+8),y:y+4,"text-anchor":left?"end":"start",class:"seqtxt"+(s.ret?" r":"")},s.t));
+    } else {const dir=x2>x1?1:-1, ex=x2-dir*7;
+      svg.append(mk("line",{x1:x1,y1:y,x2:ex,y2:y,class:line}));
+      svg.append(mk("path",{d:"M "+x2+" "+y+" l "+(-dir*8)+" -5 v 10 z",class:head}));
+      svg.append(mk("text",{x:(x1+x2)/2,y:y-7,"text-anchor":"middle",class:"seqtxt"+(s.ret?" r":"")},s.t));
+      if(s.n) svg.append(mk("text",{x:(x1+x2)/2,y:y+12,"text-anchor":"middle",class:"seqnote"},s.n));}});
+  el.append(svg);
+  if(caption){const c=document.createElement("div");c.className="seqcap";c.textContent=caption;el.append(c);}
+}
+renderSeq(document.getElementById("flow"),
+  [{id:"agent",label:"Agent"},{id:"appr",label:"Approval",sub:"trusted"},{id:"kc",label:"Keycloak"},{id:"human",label:"Human"},{id:"tools",label:"Tools-API"}],
+  [
+    {from:"agent",to:"appr",t:"register {action, params}"},
+    {from:"appr",to:"agent",t:"reference id + action token",ret:true},
+    {from:"agent",to:"kc",t:"CIBA auth · binding_message=ref"},
+    {from:"kc",to:"appr",t:"delegation POST (built-in channel)"},
+    {from:"appr",to:"human",t:"notify + trusted UI"},
+    {from:"human",to:"appr",t:"Approve"},
+    {from:"appr",to:"kc",t:"decision callback · SUCCEED"},
+    {from:"kc",to:"agent",t:"CIBA token (poll)",ret:true},
+    {from:"agent",to:"tools",t:"email.send · action token"},
+    {from:"tools",to:"appr",t:"consume: hash-verify + single-use"},
+    {from:"appr",to:"tools",t:"ok",ret:true},
+    {from:"tools",to:"tools",t:"send via Mailpit sink"}
+   ],
+  'Register → approve what you see → run it once. Hash + single-use enforced at consume.');
+</script>

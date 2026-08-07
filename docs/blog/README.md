@@ -32,3 +32,10 @@ without Jekyll processing.
 - Each new milestone slots into the M0 roadmap and gets its own page here.
 - A full end-to-end **walkthrough** is deliberately deferred to a capstone
   (M6 / demo) rather than duplicated across every page.
+- **Every milestone page carries a flow diagram** (the norm). Each page includes
+  a small self-contained `renderSeq(el, actors, steps, caption)` component that
+  draws a theme-aware SVG **sequence diagram** of the milestone's flow — numbered
+  steps, solid arrows for requests and dashed for returns, actor lifelines. The
+  CSS lives under `/* sequence-diagram component */` and the data is a per-page
+  `actors`/`steps` array. New pages copy the component and describe their flow the
+  same way, so the diagrams read as one system.
