@@ -128,7 +128,8 @@ prokura/
 ## Roadmap / v1
 
 The forward-looking items from `SPEC.md` §10 and the SPEC-REVIEW roadmap notes live
-here now:
+here. The list below is largely **parity and completeness** — the table stakes a mature
+agent-identity platform (an "Auth0 for AI agents") would be expected to carry:
 
 - **SPIFFE/SPIRE** workload attestation, replacing static client secrets for agent
   identity.
@@ -145,6 +146,71 @@ here now:
   SR-02) hardened.
 - Production posture: mTLS between services, secret rotation, HA topologies — the
   accepted residuals in the threat model's register.
+
+### Beyond parity — where Prokura earns its keep
+
+Parity makes it credible; these make it worth adopting. v0 proves delegation can be
+*safe*; v1 should make safe delegation something people can **live with, on the tools they
+actually use**. Roughly ranked by leverage — the first three are the proposed v1 spine.
+
+1. **MCP gateway mode — protect tools you didn't write.** Today the guarantees apply only
+   to Prokura's three demo tools. A **proxy that fronts any upstream MCP server** — passing
+   through `tools/list`, classifying tools by risk, and transparently wrapping sensitive
+   calls in the `428 → approve → consume` ceremony while re-exchanging tokens per upstream
+   audience — turns Prokura from a reference-with-demo-tools into **drop-in delegation for
+   the whole MCP ecosystem**. It's a re-aiming of the existing MCP service, not a rebuild,
+   and it's the single highest-leverage move: the difference between an exhibit and an appliance.
+
+2. **The authority console — one surface where a human governs their agents.** The
+   delegation-chain console is operator-facing; the *human's* own experience is scattered
+   across four surfaces (two consents, the approval UI, ntfy). v1's usability centerpiece is
+   a user-facing **"my agents" panel**: every agent acting for me, what each may do, pending
+   approvals, a live activity feed (the already-correlated Loki audit lines), and
+   **one-click revoke** per agent. Power of attorney is only tolerable if you can read the
+   register and tear up the grant — and nothing today aggregates that view for the principal.
+
+3. **Instant revocation & continuous evaluation (the kill switch).** TTL-as-only-revocation
+   is the biggest gap for real use. Revoking consent should *immediately* deny in-flight
+   authority — the per-hand-out consent-tuple check (already there) plus Keycloak
+   session/offline-token revocation plus a broker deny-list, propagated in seconds; the
+   standards-track version adopts **Shared Signals / CAEP** so revocation and risk events
+   become signals other systems can consume. "How fast can you make an agent stop?" is the
+   first question a security team asks; today the answer is "up to 15 minutes," and v1 can
+   make it "now."
+
+4. **Risk-tiered approval — beat approval fatigue.** Human-in-the-loop dies of fatigue: if
+   everything needs a click, humans rubber-stamp and the control becomes theater. Make
+   approval a **graduated policy** (a small Cedar-style engine between the tool and the
+   approval service): auto-allow within policy, approve the genuinely sensitive, hard-deny
+   the forbidden — with **bounded standing approvals** ("this and similar for 1 hour, max 5
+   sends") that are themselves hash-scoped and audited. This is where security and usability
+   are the *same* feature.
+
+5. **Taint-aware step-up — prompt-injection containment as a mechanism, not a hope.** When a
+   delegated session ingests **untrusted content** (a low-trust RAG chunk, a fetched web
+   page), mark the session *tainted* and have the MCP layer raise the bar for subsequent
+   side-effectful calls — require approval where it would normally auto-allow, or shrink
+   scopes. The model above the boundary can be lied to; a boundary that reacts to *what the
+   model has read* is genuine defense-in-depth. Flows C and D already supply the parts.
+
+6. **Metered delegation — authority that depletes.** Real powers of attorney have limits
+   ("up to $X"). Add **budgets** to consent — N emails/day, M token issuances/hour,
+   cumulative caps — enforced at the broker/tools layer (counters keyed by the tuples that
+   already exist) and shown in the console. It turns "the agent can send email" into "the
+   agent can send *3* emails *today*," which is how people actually extend trust to automation.
+
+Two smaller but high-signal additions: **organizational approval routing** (the approver ≠
+the delegator — manager sign-off or 4-eyes for high-tier actions; real orgs won't accept an
+agent's own user rubber-stamping its actions), and **invariant monitors** — the postmortem's
+queries run continuously as live assertions ("no token ever exceeds 900 s," "no send without
+a consumed approval") that alert on violation: security regression tests against production
+telemetry.
+
+**Proposed v1 spine:** gateway (1) + authority console (2) + instant revocation (3) together
+change the category — from *a reference proving delegation can work* to *the thing you put in
+front of your agents' tools so a human can see, bound, and stop them*. Risk-tiered approval
+(4) is the fast-follow that keeps it livable; taint-aware step-up (5) is the differentiator
+worth writing a paper about.
 
 ### Drive it with a real MCP client
 
