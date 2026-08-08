@@ -146,6 +146,44 @@ here now:
 - Production posture: mTLS between services, secret rotation, HA topologies — the
   accepted residuals in the threat model's register.
 
+### Drive it with a real MCP client
+
+v0 is exercised by the in-repo smoke client; v1 proves the same chain from a **real
+external agent** (opencode, Claude Code) and fills in the delegation modes a real
+deployment needs. Each is meant to be driven end-to-end by hand:
+
+- **Local delegation, real client** — point opencode / Claude Code at the MCP URL and
+  complete discovery → DCR → OAuth 2.1 + PKCE over a **loopback redirect** (RFC 8252) →
+  login + "act on your behalf" consent → `aud=mcp-server` token, then drive
+  `get_provider_token` / `send_email` / `rag_search`. (`demo/capture/flow_a.py` already
+  performs this exact handshake headlessly; v1 is a real client doing it interactively.)
+- **Headless delegation via Device Authorization Grant** (RFC 8628) — enable device flow
+  on the realm so a browserless agent (cloud/CI) delegates by having the user approve a
+  short code on a second device.
+- **CIBA for the *initial* delegation** — reuse the approval service's existing CIBA push
+  channel (today only step-up, Flow C) to bootstrap the *first* token for a headless agent
+  via `login_hint` — no browser, no device code. Distinct from the "CIBA push mode" item
+  above, which is about step-up.
+- **Multiple clients, one user** — opencode and Claude Code side-by-side as **distinct DCR
+  clients** (distinct `azp`), each with its own consent and audit trail, both acting as you.
+- **Adversarial LLM-in-the-loop** — drive the model (Claude, inside opencode) into a
+  prompt-injected or hallucinated action and confirm the controls hold beneath it: approval
+  binds the **server-stored** payload (Flow C), RAG filters **as the user** (Flow D), and the
+  provider refresh secret never leaves OpenBao (Flow B). The model proposes; Prokura disposes.
+
+### Hardening found while building the walkthroughs
+
+- **RAG tuple reconciliation on startup** — decouple the OpenFGA document owner/viewer tuple
+  writes from the pgvector seed guard in `services/rag/ingest.py`, so an OpenFGA store reset
+  after first ingest can't silently leave every document filtered.
+- **Persist the consent-screen scope** — bake `act-on-your-behalf` into `realm-export.json`
+  as a **per-client** default scope so Flow A's explicit consent is reproducible from a cold
+  `docker compose up` (today `demo/capture/flow_a.py` configures it live, per-client, to avoid
+  forcing consent on every DCR client).
+- **Console trace→log jump** — surface the correlated Loki audit lines from an open span in
+  the delegation-chain console; the join (`correlation_id = trace_id`) is proven in the
+  telemetry postmortem and the `/api/loki` proxy is already built.
+
 ## Prior art
 
 Prokura's broker is a from-scratch minimal subset of **[Nango](https://nango.dev)** (an
