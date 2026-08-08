@@ -120,7 +120,7 @@
 
 <div class="rail"><div class="wrap">
   <div class="mark">PROKURA</div>
-  <div class="steps"><span class="cur">M0</span><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><a class="done" href="m3-human-approval.html" style="text-decoration:none">M3</a><i>·</i><span>M4</span></div>
+  <div class="steps"><span class="cur">M0</span><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><a class="done" href="m3-human-approval.html" style="text-decoration:none">M3</a><i>·</i><a class="done" href="m4-mcp-authorization.html" style="text-decoration:none">M4</a><i>·</i><a class="done" href="m5-rag-authorization.html" style="text-decoration:none">M5</a><i>·</i><a class="done" href="m6-threat-model.html" style="text-decoration:none">M6</a></div>
 </div></div>
 
 <div class="wrap">
@@ -207,16 +207,16 @@
   <section>
     <p class="kicker">Where we are &amp; what's next</p>
     <h2>The roadmap</h2>
-    <p class="lead">Six milestones, sequenced so risk is retired early and the headline (MCP) lands before the nice-to-have (RAG). Three are shipped; the token broker just landed.</p>
+    <p class="lead">Six milestones, sequenced so risk is retired early and the headline (MCP) lands before the nice-to-have (RAG). <b>All six are now shipped</b> — this page is the map; each milestone links to its write-up below.</p>
     <div class="road">
       <div class="stop"><div class="m">M0</div><div class="b"><h3>Foundation &amp; CIBA spike</h3><p>The stack, OIDC login, the 15-minute bound, and the approval-channel proof.</p></div><span class="st done">Shipped</span></div>
       <div class="stop"><div class="m">—</div><div class="b"><h3>Observability</h3><p>Born-instrumented: traceparent propagation and correlation IDs as a definition-of-done for every new service.</p></div><span class="st done">Shipped</span></div>
       <div class="stop"><div class="m">M1</div><div class="b"><h3>Delegated token exchange</h3><p>RFC 8693 — a user's login becomes a token attributable to user-via-agent, addressed to one recipient.</p></div><span class="st done">Shipped</span></div>
       <div class="stop"><div class="m">M2</div><div class="b"><h3>The token broker</h3><p>Grant acquisition, per-agent consent, and scoped provider-token hand-out. The heavy one.</p></div><span class="st done">Shipped</span></div>
-      <div class="stop current"><div class="m">M3</div><div class="b"><h3>Human approval</h3><p>CIBA over the built-in HTTP channel (proven in M0) — structured, single-use approvals for high-risk actions.</p></div><span class="st now">You are here</span></div>
-      <div class="stop"><div class="m">M4</div><div class="b"><h3>MCP authorization server</h3><p>The headline: Keycloak as an MCP AS, driving the whole chain from a real MCP client.</p></div><span class="st plan">Planned</span></div>
-      <div class="stop"><div class="m">M5</div><div class="b"><h3>RAG authorization</h3><p>A Drive-backed, ACL'd corpus with user-context filtering and an adversarial leakage test.</p></div><span class="st plan">Planned</span></div>
-      <div class="stop"><div class="m">M6</div><div class="b"><h3>Polish</h3><p>Architecture doc, threat model, ADRs, and the demo — the parts that make it a reference others can trust.</p></div><span class="st plan">Planned</span></div>
+      <div class="stop"><div class="m">M3</div><div class="b"><h3>Human approval</h3><p>CIBA over the built-in HTTP channel (proven in M0) — structured, single-use approvals for high-risk actions.</p></div><span class="st done">Shipped</span></div>
+      <div class="stop"><div class="m">M4</div><div class="b"><h3>MCP authorization server</h3><p>The headline: Keycloak as an MCP AS, driving the whole chain from a real MCP client.</p></div><span class="st done">Shipped</span></div>
+      <div class="stop"><div class="m">M5</div><div class="b"><h3>RAG authorization</h3><p>A Drive-backed, ACL'd corpus with user-context filtering and an adversarial leakage test.</p></div><span class="st done">Shipped</span></div>
+      <div class="stop"><div class="m">M6</div><div class="b"><h3>Polish &amp; threat model</h3><p>Architecture doc, threat model, ADRs, and the guided walkthroughs — the parts that make it a reference others can trust.</p></div><span class="st done">Shipped</span></div>
     </div>
   </section>
 
@@ -227,6 +227,9 @@
       <li><span class="ck">→</span><span><a href="m1-token-exchange.html"><b>M1 · Delegated Token Exchange</b></a> — how a login becomes a delegated, single-audience token.</span></li>
       <li><span class="ck">→</span><span><a href="m2-token-broker.html"><b>M2 · The Token Broker</b></a> — grants, per-agent consent, and scoped provider tokens.</span></li>
       <li><span class="ck">→</span><span><a href="m3-human-approval.html"><b>M3 · Human Approval</b></a> — CIBA-gated, single-use, hash-bound approval for sensitive actions.</span></li>
+      <li><span class="ck">→</span><span><a href="m4-mcp-authorization.html"><b>M4 · MCP Authorization</b></a> — Keycloak as the MCP authorization server; the whole chain from a real MCP client.</span></li>
+      <li><span class="ck">→</span><span><a href="m5-rag-authorization.html"><b>M5 · RAG Authorization</b></a> — authorize retrieval as the end user; the adversarial leakage proof.</span></li>
+      <li><span class="ck">→</span><span><a href="m6-threat-model.html"><b>M6 · What the Threat Model Found</b></a> — the threat model, the ADRs, and the guided walkthroughs.</span></li>
     </ul>
   </section>
 

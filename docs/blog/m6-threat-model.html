@@ -122,7 +122,7 @@
   </header>
   <hr>
   <section>
-    <p class="lead">A companion review asked <i>“are the hard rules enforced?”</i> and answered yes with evidence (see <a href="../security-review.md">security-review.md</a>). This one asks the opposite question — <i>“what can an attacker actually do?”</i> — and follows each answer to the control that stops it. The full model (assets, five STRIDE grids, disposition mapping, residual register) is <a href="../threat-model.md">threat-model.md</a>; this post walks the four attack trees that matter most.</p>
+    <p class="lead">A companion review asked <i>“are the hard rules enforced?”</i> and answered yes with evidence (see <a href="https://github.com/patrickdaj/prokura/blob/main/docs/security-review.md">security-review.md</a>). This one asks the opposite question — <i>“what can an attacker actually do?”</i> — and follows each answer to the control that stops it. The full model (assets, five STRIDE grids, disposition mapping, residual register) is <a href="https://github.com/patrickdaj/prokura/blob/main/docs/threat-model.md">threat-model.md</a>; this post walks the four attack trees that matter most.</p>
     <p class="lead">The attacker model is explicit. Every path below is attributed to a defined adversary: a <b>compromised agent</b> holding a valid user-delegated token, a <b>self-registered MCP client</b>, an <b>on-network attacker</b> (no mTLS between services), a <b>malicious grant-linking user</b>, or a <b>curious insider</b>. None can forge Keycloak's signatures, read OpenBao without the broker's scoped token, or write an authorization tuple except through broker code — and those boundaries are what the trees keep hitting.</p>
   </section>
 
@@ -184,8 +184,8 @@
     <h2>Three lenses on one system</h2>
     <p class="lead">M6 looks at the finished architecture through three non-overlapping lenses so nothing hides in the seams between them:</p>
     <ul class="checks">
-      <li><span class="ck">◆</span><span><b>Control-centric</b> (<a href="../security-review.md">security-review.md</a>) — are the hard rules enforced? One <code>security-baseline</code> contract, evidence per invariant.</span></li>
-      <li><span class="ck">◆</span><span><b>Adversary-centric</b> (this, <a href="../threat-model.md">threat-model.md</a>) — what can an attacker do? STRIDE per flow, attack trees, every threat mapped to a control or an accepted residual.</span></li>
+      <li><span class="ck">◆</span><span><b>Control-centric</b> (<a href="https://github.com/patrickdaj/prokura/blob/main/docs/security-review.md">security-review.md</a>) — are the hard rules enforced? One <code>security-baseline</code> contract, evidence per invariant.</span></li>
+      <li><span class="ck">◆</span><span><b>Adversary-centric</b> (this, <a href="https://github.com/patrickdaj/prokura/blob/main/docs/threat-model.md">threat-model.md</a>) — what can an attacker do? STRIDE per flow, attack trees, every threat mapped to a control or an accepted residual.</span></li>
       <li><span class="ck">◆</span><span><b>Decision-centric</b> (<a href="../adr/">adr/</a>) — why does each control exist? One ADR per locked decision.</span></li>
     </ul>
     <p style="margin-top:22px"></p>
@@ -195,7 +195,7 @@
   <footer>
     <div class="nextlink">
       <div><div class="lab">Previous milestone</div><a href="m5-rag-authorization.html">← M5 · RAG Authorization</a></div>
-      <div style="text-align:right"><div class="lab">Full model</div><a href="../threat-model.md">threat-model.md →</a></div>
+      <div style="text-align:right"><div class="lab">Full model</div><a href="https://github.com/patrickdaj/prokura/blob/main/docs/threat-model.md">threat-model.md →</a></div>
     </div>
     <div class="paths">
       docs/threat-model.md &nbsp;·&nbsp; assets · attacker model · trust boundaries · 5 STRIDE grids · 4 attack trees · disposition mapping · residual register<br>
