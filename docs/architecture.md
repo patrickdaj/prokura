@@ -158,8 +158,12 @@ actually use**. Roughly ranked by leverage — the first three are the proposed 
    through `tools/list`, classifying tools by risk, and transparently wrapping sensitive
    calls in the `428 → approve → consume` ceremony while re-exchanging tokens per upstream
    audience — turns Prokura from a reference-with-demo-tools into **drop-in delegation for
-   the whole MCP ecosystem**. It's a re-aiming of the existing MCP service, not a rebuild,
-   and it's the single highest-leverage move: the difference between an exhibit and an appliance.
+   the whole MCP ecosystem**. It's a re-aiming of the existing MCP service, not a rebuild.
+   **The important nuance (see [Positioning](#positioning--data-plane-vs-authority-control-plane)):**
+   a mature MCP *data plane* like agentgateway already fronts and federates servers and does
+   OBO/token-exchange/tool-RBAC — so the higher-leverage form of "gateway mode" is not
+   reinventing a proxy, but plugging Prokura's approval + brokering + data-layer authorization
+   into a data plane's **external-authorization** hook.
 
 2. **The authority console — one surface where a human governs their agents.** The
    delegation-chain console is operator-facing; the *human's* own experience is scattered
@@ -256,3 +260,39 @@ Prokura's broker is a from-scratch minimal subset of **[Nango](https://nango.dev
 established OSS third-party OAuth token broker). Prokura's value is the *assembly* —
 delegation + CIBA + FGA + brokering under one identity model, reachable over MCP — not
 the broker in isolation (ADR-0016).
+
+## Positioning — data plane vs. authority control plane
+
+The nearest adjacent project is **[agentgateway](https://agentgateway.dev)** (a Linux
+Foundation project; Solo.io plus hyperscaler contributors) — a production, Rust **data plane**
+for agent traffic. It is tempting to read it as a competitor; the honest picture is that the two
+sit at different layers with a clean boundary between them.
+
+**What agentgateway already does well — and Prokura should not rebuild:** a scalable proxy that
+fronts and **federates** MCP/A2A servers; MCP **OAuth 2.1** with **OBO (on-behalf-of) tokens**
+(user + agent), **secure token exchange**, and agent identity as a first-class citizen;
+**tool-level RBAC via Cedar** (ReBAC/ABAC); tamper-evident audit; transport security (mTLS /
+TLS 1.3), rate limiting, guardrails / PII redaction, LLM routing and cost controls; Kubernetes /
+Gateway-API native. In short, **delegated identity and tool-level authorization are not a Prokura
+moat** — a mature data plane already carries them.
+
+**Prokura's genuine, non-overlapping differentiators** are the authority semantics a proxy does
+not carry:
+
+- **Human-in-the-loop approval** bound to the *server-stored* payload — CIBA, trusted rendering,
+  single-use, hash-bound. agentgateway has no human-approval workflow. *(This is the biggest.)*
+- **Third-party credential brokering with secret custody** — refresh credentials sealed in OpenBao,
+  short-lived downstream provider tokens, never handed to the agent. agentgateway explicitly does
+  **not** broker credentials; it secures the MCP hop, not the downstream OAuth grant.
+- **Authorize-as-the-end-user at the data layer** — per-document, per-user filtering *inside the
+  retrieval path* (Flow D). A gateway authorizes *whether you may call `rag_search`*; Prokura
+  authorizes *which chunks reach the answer*, evaluated as the human.
+- **Consent-driven grant authority** — the *user* consents to a specific agent using a specific
+  third-party grant (the `can_use` tuple), rather than an operator configuring policy centrally.
+
+**The integration thesis:** agentgateway exposes an **external-authorization** interface (gRPC /
+HTTP) — that is the socket. The strongest v1 position is not a competing proxy but the
+**delegation + approval + brokering control plane** that a data plane (agentgateway, or any MCP
+gateway) calls into for the decisions it does not make itself. The data plane moves and secures the
+bytes; Prokura decides what it means for an agent to act *as you* — and keeps a human on the hook
+for the actions that matter.
