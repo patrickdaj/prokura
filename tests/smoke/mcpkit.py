@@ -8,14 +8,13 @@ the RFC 8707 resource param — and speaks the minimal MCP JSON-RPC surface
 
 import base64
 import hashlib
-import html
 import json
 import re
 import secrets
 
 import httpx
 
-from conftest import DEMO_PASSWORD, DEMO_USER, KEYCLOAK_URL, REALM
+from conftest import KEYCLOAK_URL, REALM
 
 MCP_URL = "http://localhost:8140"
 MCP_ENDPOINT = f"{MCP_URL}/mcp"
@@ -52,38 +51,41 @@ def as_metadata(c: httpx.Client) -> dict:
 
 # --- DCR (RFC 7591) + OAuth 2.1 + PKCE ----------------------------------------
 
-def register_client(c: httpx.Client, reg_endpoint: str | None = None) -> str:
+def register_client(c: httpx.Client, reg_endpoint: str | None = None,
+                    scope: str | None = None) -> str:
+    """Register a public client (RFC 7591). Pass scope to mirror real MCP clients
+    (Claude among them), which echo the PRM's scopes_supported into the DCR body."""
     reg_endpoint = reg_endpoint or f"{KEYCLOAK_URL}/realms/{REALM}/clients-registrations/openid-connect"
-    reg = c.post(reg_endpoint,
-                 headers={"Content-Type": "application/json"},
-                 json={"client_name": "prokura-mcp-smoke", "redirect_uris": [REDIRECT],
-                       "token_endpoint_auth_method": "none",
-                       "grant_types": ["authorization_code", "refresh_token"],
-                       "response_types": ["code"]})
+    body = {"client_name": "prokura-mcp-smoke", "redirect_uris": [REDIRECT],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"]}
+    if scope:
+        body["scope"] = scope
+    reg = c.post(reg_endpoint, headers={"Content-Type": "application/json"}, json=body)
     assert reg.status_code == 201, f"DCR failed: {reg.status_code} {reg.text[:300]}"
     return reg.json()["client_id"]
 
 
-def login(c: httpx.Client, client_id: str) -> str:
-    """OAuth 2.1 authorization code + PKCE as the demo user, sending the RFC 8707
-    resource param. Returns the access token (expected aud=mcp-server)."""
+def login(c: httpx.Client, client_id: str, scope: str = "openid",
+          user: str = "alice") -> str:
+    """OAuth 2.1 authorization code + PKCE, sending the RFC 8707 resource param.
+    The HUMAN leg — the real login page, plus the consent screen every DCR
+    client requires — is played by humankit in a browser (M7 quarantine: this
+    kit holds no user credential). Returns the access token (aud=mcp-server)."""
+    import humankit
+
     verifier = _b64(secrets.token_bytes(32))
     challenge = _b64(hashlib.sha256(verifier.encode()).digest())
-    auth = c.get(f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/auth", params={
-        "client_id": client_id, "response_type": "code", "redirect_uri": REDIRECT,
-        "scope": "openid", "state": "s", "code_challenge": challenge,
-        "code_challenge_method": "S256", "resource": f"{MCP_URL}/mcp"})
-    assert auth.status_code == 200, auth.text[:300]
-    cookies = dict(sc.split(";", 1)[0].split("=", 1)
-                   for sc in auth.headers.get_list("set-cookie"))
-    m = re.search(r'id="kc-form-login"[^>]*action="([^"]+)"', auth.text)
-    assert m, "no kc-form-login action on the login page"
-    r = c.post(html.unescape(m.group(1)),
-               data={"username": DEMO_USER, "password": DEMO_PASSWORD},
-               headers={"Cookie": "; ".join(f"{k}={v}" for k, v in cookies.items())})
-    loc = r.headers.get("location", "")
-    assert loc.startswith(REDIRECT), f"login did not redirect to callback: {r.status_code} {loc[:120]}"
-    code = httpx.URL(loc).params.get("code")
+    auth_url = str(httpx.URL(
+        f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/auth",
+        params={"client_id": client_id, "response_type": "code",
+                "redirect_uri": REDIRECT, "scope": scope, "state": "s",
+                "code_challenge": challenge, "code_challenge_method": "S256",
+                "resource": f"{MCP_URL}/mcp"}))
+    final = humankit.auth_code_login(auth_url, REDIRECT, user=user)
+    code = httpx.URL(final).params.get("code")
+    assert code, f"no code on redirect: {final[:150]}"
     tok = c.post(f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/token", data={
         "grant_type": "authorization_code", "client_id": client_id, "code": code,
         "redirect_uri": REDIRECT, "code_verifier": verifier, "resource": f"{MCP_URL}/mcp"})

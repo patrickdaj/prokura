@@ -14,21 +14,40 @@ Born instrumented: traceparent join key + prokura.correlation_id, realtime audit
 """
 
 import os
+import re
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Header, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 import audit
+import config
 import consent
 import db
 import fga
 import grants
 import validation
 from telemetry import setup_telemetry
+from websession import WebSession
 
 HERE = os.path.dirname(__file__)
 app = FastAPI(title="prokura-token-broker")
 setup_telemetry(app)
+
+# M7 (D2): the consent surface has its own OIDC session — the owner identity for
+# every consent write comes from this session, never from a URL-carried token.
+ws = WebSession(
+    issuer_public=config.KEYCLOAK_ISSUER,
+    issuer_internal=f"{config.KEYCLOAK_INTERNAL}/realms/{config.REALM}",
+    client_id=config.UI_CLIENT_ID,
+    client_secret=config.UI_CLIENT_SECRET,
+    redirect_uri=f"{config.BROKER_PUBLIC_URL}/callback",
+    cookie_name=config.SESSION_COOKIE,
+    secret=config.SESSION_SECRET,
+    max_age=config.SESSION_MAX_AGE,
+)
+
+_PARAM_RE = re.compile(r"^[A-Za-z0-9 ._:-]{0,128}$")
 
 
 @app.on_event("startup")
@@ -38,7 +57,7 @@ def _startup() -> None:
 
 def _bearer(authorization: str | None) -> str:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise _Http(401, "missing bearer token")
+        raise _Http(401, "missing_token")
     return authorization.split(" ", 1)[1]
 
 
@@ -65,10 +84,12 @@ async def issue_token(provider: str, request: Request,
     try:
         claims = validation.verify_bearer(token)
     except validation.TokenInvalid as e:
-        raise _Http(401, f"invalid token: {e}")
+        # SR-01: stable machine codes out; library/upstream detail to audit only.
+        audit.emit(decision="denied_invalid_token", provider=provider, detail=str(e))
+        raise _Http(401, "invalid_token")
     except validation.WrongAudience as e:
         audit.emit(decision="denied_audience", provider=provider, detail=str(e))
-        raise _Http(403, f"wrong audience: {e}")
+        raise _Http(403, "wrong_audience")
 
     user = claims.get("preferred_username")
     agent = claims.get("azp")
@@ -83,24 +104,24 @@ async def issue_token(provider: str, request: Request,
     grant = db.get_grant(user, provider)
     if not grant:
         audit.emit(decision="denied_no_grant", user=user, agent=agent, provider=provider)
-        raise _Http(403, "no grant for this user/provider")
+        raise _Http(403, "no_grant")
 
     # Step: requested scopes must be a subset of the grant (never contact provider otherwise).
     if not validation.scopes_subset(requested, grant["granted_scopes"]):
         audit.emit(decision="denied_scope", user=user, agent=agent, provider=provider,
                    scopes=" ".join(requested))
-        raise _Http(403, "requested scopes exceed grant")
+        raise _Http(403, "scope_exceeds_grant")
 
     # Step: per-agent consent (OpenFGA can_use).
     if not consent.is_allowed(agent, user, provider):
         audit.emit(decision="denied_consent", user=user, agent=agent, provider=provider)
-        raise _Http(403, "agent not consented for this grant")
+        raise _Http(403, "not_consented")
 
     try:
         issued = grants.issue_provider_token(user, provider)
     except grants.GrantError as e:
         audit.emit(decision="error", user=user, agent=agent, provider=provider, detail=str(e))
-        raise _Http(502, f"provider issuance failed: {e}")
+        raise _Http(502, "provider_issuance_failed")
 
     audit.emit(decision="issued", user=user, agent=agent, provider=provider,
                scopes=issued.get("scope"), ttl=issued["expires_in"])
@@ -120,15 +141,17 @@ def import_grant(provider: str, authorization: str | None = Header(default=None)
     try:
         claims = validation.verify_bearer(token)
     except validation.TokenInvalid as e:
-        raise _Http(401, f"invalid token: {e}")
+        audit.emit(decision="denied_invalid_token", provider=provider, detail=str(e))
+        raise _Http(401, "invalid_token")
     except validation.WrongAudience as e:
-        raise _Http(403, f"wrong audience: {e}")
+        audit.emit(decision="denied_audience", provider=provider, detail=str(e))
+        raise _Http(403, "wrong_audience")
     user = claims.get("preferred_username")
     try:
         summary = grants.import_grant(token, user, provider)
     except grants.GrantError as e:
         audit.emit(decision="import_failed", user=user, provider=provider, detail=str(e))
-        raise _Http(502, f"grant import failed: {e}")
+        raise _Http(502, "grant_import_failed")
     audit.emit(decision="grant_imported", user=user, provider=provider,
                scopes=summary["scopes"])
     return JSONResponse(summary)
@@ -140,12 +163,50 @@ def revoke_grant(provider: str, authorization: str | None = Header(default=None)
     try:
         claims = validation.verify_signature(token)
     except validation.TokenInvalid as e:
-        raise _Http(401, f"invalid token: {e}")
+        audit.emit(decision="denied_invalid_token", detail=str(e))
+        raise _Http(401, "invalid_token")
     user = claims.get("preferred_username")
     grants.revoke_grant(user, provider)
     fga.delete_all_can_use(user, provider)  # revoke drops all can_use tuples
     audit.emit(decision="grant_revoked", user=user, provider=provider)
     return JSONResponse({"revoked": True, "provider": provider})
+
+
+# --- consent surface session (M7, D2) -----------------------------------------
+
+def _session(request: Request) -> dict:
+    sess = ws.session_from(request.cookies.get(config.SESSION_COOKIE))
+    if not sess:
+        raise _Http(401, "session_required")
+    return sess
+
+
+@app.get("/login")
+def login(agent: str = "", provider: str = "", scopes: str = "") -> RedirectResponse:
+    # The consent target rides the signed OAuth state; junk is dropped, and the
+    # post-login redirect is fixed to /consent (no open-redirect surface).
+    target = {k: v for k, v in (("agent", agent), ("provider", provider),
+                                ("scopes", scopes)) if v and _PARAM_RE.match(v)}
+    return RedirectResponse(ws.login_url(urlencode(target)))
+
+
+@app.get("/callback", response_model=None)
+def callback(code: str = "", state: str = "") -> JSONResponse | RedirectResponse:
+    out = ws.handle_callback(code, state) if code and state else None
+    if out is None:
+        return JSONResponse({"error": "login_failed"}, status_code=400)
+    sess, target = out
+    resp = RedirectResponse(f"/consent?{target}" if target else "/consent", status_code=303)
+    resp.set_cookie(config.SESSION_COOKIE, ws.cookie_value(sess),
+                    httponly=True, samesite="lax", max_age=config.SESSION_MAX_AGE)
+    audit.emit(decision="surface_login", user=sess["preferred_username"])
+    return resp
+
+
+@app.get("/whoami")
+def whoami(request: Request) -> JSONResponse:
+    sess = _session(request)
+    return JSONResponse({"user": sess["preferred_username"]})
 
 
 @app.get("/consent")
@@ -154,42 +215,34 @@ def consent_screen() -> FileResponse:
 
 
 @app.post("/consent")
-async def write_consent(request: Request,
-                        authorization: str | None = Header(default=None)) -> JSONResponse:
-    token = _bearer(authorization)
-    try:
-        claims = validation.verify_signature(token)
-    except validation.TokenInvalid as e:
-        raise _Http(401, f"invalid token: {e}")
-    # The authenticated user is the grant owner — a user consents only for their
-    # own grants. operator == owner is then enforced inside consent.grant_consent.
-    user = claims.get("preferred_username")
+async def write_consent(request: Request) -> JSONResponse:
+    # The grant OWNER is the session identity — the human signed in on this
+    # surface. No bearer path exists; a user consents only for their own
+    # grants, and operator == owner is enforced inside consent.grant_consent
+    # (F1-A/Q3-B, now against a real session).
+    sess = _session(request)
+    user = sess["preferred_username"]
     body = await request.json()
     agent = body.get("agent")
     provider = body.get("provider")
     if not agent or not provider:
-        raise _Http(400, "agent and provider required")
+        raise _Http(400, "missing_fields")
     if not grants.grant_exists(user, provider):
-        raise _Http(404, "no grant to consent to")
+        raise _Http(404, "no_grant")
     try:
         consent.grant_consent(agent, user, provider)
     except consent.ConsentRefused as e:
         audit.emit(decision="consent_refused", user=user, agent=agent, provider=provider,
                    detail=str(e))
-        raise _Http(403, f"consent refused: {e}")
+        raise _Http(403, "consent_refused")
     audit.emit(decision="consent_granted", user=user, agent=agent, provider=provider)
     return JSONResponse({"consented": True, "agent": agent, "provider": provider})
 
 
 @app.post("/v1/consent/revoke")
-async def revoke_consent(request: Request,
-                         authorization: str | None = Header(default=None)) -> JSONResponse:
-    token = _bearer(authorization)
-    try:
-        claims = validation.verify_signature(token)
-    except validation.TokenInvalid as e:
-        raise _Http(401, f"invalid token: {e}")
-    user = claims.get("preferred_username")
+async def revoke_consent(request: Request) -> JSONResponse:
+    sess = _session(request)
+    user = sess["preferred_username"]
     body = await request.json()
     agent = body.get("agent")
     provider = body.get("provider")

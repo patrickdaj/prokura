@@ -43,13 +43,28 @@ def protected_resource_metadata() -> JSONResponse:
         "resource": config.MCP_RESOURCE,
         "authorization_servers": [config.KEYCLOAK_ISSUER],
         "bearer_methods_supported": ["header"],
-        "scopes_supported": ["openid"],
+        # Clients echo these into DCR and the authorization request, so only
+        # advertise scopes the realm's anonymous DCR policy admits (realm
+        # defaults) — advertising openid here used to break registration.
+        # offline_access rides along because Keycloak's DCR-with-scope assignment
+        # REPLACES realm defaults: a client that registers without it loses it,
+        # then fails invalid_scope when requesting a refresh-capable session.
+        "scopes_supported": [config.MCP_SCOPE, "offline_access"],
     })
 
 
 def _challenge() -> JSONResponse:
     return JSONResponse({"error": "unauthorized"}, status_code=401,
                         headers={"WWW-Authenticate": _WWW_AUTH})
+
+
+def _insufficient_scope() -> JSONResponse:
+    # RFC 6750 §3.1: right resource, but the grant does not cover it — 403, and
+    # the challenge names the scope the client should request.
+    www = (f'Bearer error="insufficient_scope", scope="{config.MCP_SCOPE}", '
+           f'resource_metadata="{_METADATA_URL}"')
+    return JSONResponse({"error": "insufficient_scope"}, status_code=403,
+                        headers={"WWW-Authenticate": www})
 
 
 @app.post("/mcp")
@@ -64,6 +79,8 @@ async def mcp_endpoint(request: Request,
         claims = validation.verify_bearer(token)
     except (validation.TokenInvalid, validation.WrongAudience):
         return _challenge()
+    except validation.InsufficientScope:
+        return _insufficient_scope()
 
     try:
         msg = await request.json()

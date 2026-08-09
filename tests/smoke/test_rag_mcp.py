@@ -16,7 +16,7 @@ def stack(keycloak, rag, openfga):
 
 def test_rag_search_is_advertised(stack):
     with httpx.Client(follow_redirects=False, timeout=30.0) as c:
-        token = ragkit.mcp_token(c, "alice", "alice")
+        token = ragkit.mcp_token(c, "alice")
         r = c.post(f"{ragkit.MCP_URL}/mcp", headers={"Authorization": f"Bearer {token}"},
                    json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     names = [t["name"] for t in r.json()["result"]["tools"]]
@@ -25,7 +25,7 @@ def test_rag_search_is_advertised(stack):
 
 def test_rag_search_preserves_end_user_alice(stack):
     with httpx.Client(follow_redirects=False, timeout=30.0) as c:
-        token = ragkit.mcp_token(c, "alice", "alice")
+        token = ragkit.mcp_token(c, "alice")
         out, is_error = ragkit.search_via_mcp(c, token)
     assert not is_error, out
     assert out["user"] == "alice"
@@ -34,7 +34,7 @@ def test_rag_search_preserves_end_user_alice(stack):
 
 def test_rag_search_filters_for_non_viewer_bob(stack):
     with httpx.Client(follow_redirects=False, timeout=30.0) as c:
-        token = ragkit.mcp_token(c, "bob", "bob")
+        token = ragkit.mcp_token(c, "bob")
         out, is_error = ragkit.search_via_mcp(c, token)
     assert not is_error, out
     assert out["user"] == "bob"
@@ -48,7 +48,7 @@ def test_inbound_mcp_token_not_forwarded_downstream(stack):
     # directly to the retriever is refused. So a working rag_search tool must have
     # exchanged it — the server never passes the inbound token through.
     with httpx.Client(follow_redirects=False, timeout=30.0) as c:
-        token = ragkit.mcp_token(c, "alice", "alice")
+        token = ragkit.mcp_token(c, "alice")
     r = httpx.post(f"{ragkit.RAG_URL}/rag/search",
                    headers={"Authorization": f"Bearer {token}"},
                    json={"query": ragkit.ADVERSARIAL_QUERY}, timeout=15.0)

@@ -27,3 +27,27 @@ SERVICE_NAME = os.environ.get("OTEL_SERVICE_NAME", "approval")
 CIBA_CALLBACK = (
     f"{KEYCLOAK_INTERNAL}/realms/{REALM}/protocol/openid-connect/ext/ciba/auth/callback"
 )
+
+# M7 (ADR-0022): the approval service owns CIBA ceremony initiation — the only
+# client with the CIBA grant. Poll delivery; the issued token is discarded.
+CIBA_CLIENT_ID = os.environ.get("CIBA_CLIENT_ID", "approval-service")
+CIBA_CLIENT_SECRET = os.environ.get("CIBA_CLIENT_SECRET", "approval-service-dev-secret")
+CIBA_AUTH_URL = f"{KEYCLOAK_INTERNAL}/realms/{REALM}/protocol/openid-connect/ext/ciba/auth"
+TOKEN_URL = f"{KEYCLOAK_INTERNAL}/realms/{REALM}/protocol/openid-connect/token"
+
+# M7 (D2): browser session on the trusted surface.
+UI_CLIENT_ID = os.environ.get("UI_CLIENT_ID", "approval-ui")
+UI_CLIENT_SECRET = os.environ.get("UI_CLIENT_SECRET", "approval-ui-dev-secret")
+SESSION_SECRET = os.environ.get("SESSION_SECRET", "approval-session-dev-secret")
+SESSION_COOKIE = "prokura_approval_session"
+# Session lifetime mirrors the SSO session (D2) — the 15-min honesty rule is
+# about delegated tokens, not first-party browser sessions.
+SESSION_MAX_AGE = int(os.environ.get("SESSION_MAX_AGE", "1800"))
+
+# SR-02: cap on the /ciba/delegate request body (Keycloak's payload is ~1 KB).
+DELEGATE_BODY_CAP = 16 * 1024
+
+# An undecided approval expires with the backchannel window (mirrors the realm's
+# cibaExpiresIn). Enforced HERE since M7: the agent-side CIBA poll that used to
+# surface expiry no longer exists (ADR-0022), so the ceremony owner enforces it.
+APPROVAL_TTL_SECONDS = int(os.environ.get("APPROVAL_TTL_SECONDS", "600"))

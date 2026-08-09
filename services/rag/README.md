@@ -31,7 +31,7 @@ At startup, ingestion reads the **Drive-shaped manifest** (`deploy/rag/manifest.
 writes each document's `owner`/`viewer` tuples to OpenFGA, then embeds the corpus
 (`deploy/rag/corpus/`) into pgvector. `embedder.py` is an offline deterministic demo embedder
 with a documented real-model swap point (ADR-0020); pgvector lives in the existing Postgres,
-no new vector container (ADR-0019). Drive-shaped ACLs: ADR-0015.
+no new vector container (ADR-0022). Drive-shaped ACLs: ADR-0015.
 
 > Note: tuple-writing is currently coupled to the seed step, so it is skipped when the vector
 > store is already populated — see the "RAG tuple reconciliation on startup" item in

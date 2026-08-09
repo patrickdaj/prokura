@@ -48,7 +48,7 @@ async def _http_handler(_: Request, exc: _Http) -> JSONResponse:
 
 def _bearer(authorization: str | None) -> str:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise _Http(401, "missing bearer token")
+        raise _Http(401, "missing_token")
     return authorization.split(" ", 1)[1]
 
 
@@ -67,10 +67,12 @@ async def search(request: Request,
     try:
         claims = validation.verify_bearer(token)
     except validation.TokenInvalid as e:
-        raise _Http(401, f"invalid token: {e}")
+        # SR-01: stable machine codes out; library detail to audit only.
+        audit.emit(decision="denied_invalid_token", detail=str(e))
+        raise _Http(401, "invalid_token")
     except validation.WrongAudience as e:
         audit.emit(decision="denied_audience", detail=str(e))
-        raise _Http(403, f"wrong audience: {e}")
+        raise _Http(403, "wrong_audience")
 
     # The end-user identity is derived from the validated token, never from the
     # caller. No end user (agent-only credentials) -> refuse: agent identity is
@@ -79,7 +81,7 @@ async def search(request: Request,
     agent = claims.get("azp")
     if not user:
         audit.emit(decision="denied_no_user", agent=agent)
-        raise _Http(403, "no end-user identity in token; agent identity is insufficient")
+        raise _Http(403, "no_end_user")
 
     body = {}
     try:

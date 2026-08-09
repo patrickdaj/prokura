@@ -15,6 +15,12 @@ REALM = os.environ.get("PROKURA_REALM", "prokura")
 # defense). Bound by the mcp-audience client scope (RFC 8707 workaround).
 MCP_AUDIENCE = os.environ.get("MCP_AUDIENCE", "mcp-server")
 
+# The OAuth scope this resource server requires on inbound tokens, advertised in
+# the PRM's scopes_supported. Must be a realm-default client scope: the anonymous
+# DCR policy only admits realm defaults, and real MCP clients echo scopes_supported
+# into their registration request.
+MCP_SCOPE = os.environ.get("MCP_SCOPE", "mcp:access")
+
 # Public origin used to build RFC 9728 metadata URLs; must match how clients reach
 # the server (the token's issuer host family), so the canonical resource URI and
 # the resource_metadata pointer are the ones a real MCP client can fetch.

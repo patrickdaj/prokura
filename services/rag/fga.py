@@ -62,6 +62,38 @@ def batch_check_viewer(username: str, doc_ids: list[str]) -> dict[str, bool]:
     return {d: by_corr.get(checks[i]["correlation_id"], False) for i, d in enumerate(doc_ids)}
 
 
+def read_object_tuples(doc_id: str) -> set[tuple[str, str]]:
+    """All stored (user, relation) tuples for one document — the reconciliation
+    read (M7): what the store ACTUALLY holds, regardless of vector-seed state."""
+    r = httpx.post(f"{_base()}/stores/{store_id()}/read",
+                   json={"tuple_key": {"object": f"document:{doc_id}"}}, timeout=10.0)
+    r.raise_for_status()
+    return {(t["key"]["user"], t["key"]["relation"])
+            for t in r.json().get("tuples", [])}
+
+
+def expected_tuples(doc_id: str, owner: str, viewers: list[str]) -> set[tuple[str, str]]:
+    keys = {(f"user:{owner}", "owner")}
+    for v in viewers:
+        keys.add(("user:*" if v == "*" else f"user:{v}", "viewer"))
+    return keys
+
+
+def write_missing_tuples(doc_id: str, missing: set[tuple[str, str]]) -> None:
+    """Write exactly the absent tuples (one transactional batch of genuinely
+    missing keys — a mixed batch with duplicates would fail wholesale, which is
+    how a store reset used to leave documents silently filtered)."""
+    if not missing:
+        return
+    obj = f"document:{doc_id}"
+    keys = [{"user": u, "relation": rel, "object": obj} for u, rel in sorted(missing)]
+    with tracer().start_as_current_span("fga.write") as span:
+        span.set_attribute("prokura.fga.object", obj)
+        r = httpx.post(f"{_base()}/stores/{store_id()}/write",
+                       json={"writes": {"tuple_keys": keys}}, timeout=10.0)
+    r.raise_for_status()
+
+
 def write_document_tuples(doc_id: str, owner: str, viewers: list[str]) -> None:
     """Write ``owner`` / ``viewer`` tuples for a document. ``viewers`` entries may be
     a username or ``"*"`` (public, written as ``user:*``). Idempotent."""

@@ -34,3 +34,11 @@ SERVICE_NAME = os.environ.get("OTEL_SERVICE_NAME", "token-broker")
 
 # Hand-out interval cap (TTL honesty — token-brokering spec).
 MAX_TTL_SECONDS = 900
+
+# M7 (D2): browser session on the consent surface.
+BROKER_PUBLIC_URL = os.environ.get("BROKER_PUBLIC_URL", "http://localhost:8110")
+UI_CLIENT_ID = os.environ.get("UI_CLIENT_ID", "broker-ui")
+UI_CLIENT_SECRET = os.environ.get("UI_CLIENT_SECRET", "broker-ui-dev-secret")
+SESSION_SECRET = os.environ.get("SESSION_SECRET", "broker-session-dev-secret")
+SESSION_COOKIE = "prokura_consent_session"
+SESSION_MAX_AGE = int(os.environ.get("SESSION_MAX_AGE", "1800"))

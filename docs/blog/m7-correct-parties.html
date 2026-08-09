@@ -1,0 +1,176 @@
+<meta charset="utf-8">
+<title>Prokura — M7: Correct Parties</title>
+<style>
+  :root{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+      --ink:#10151c; --muted:#566372; --faint:#8794a2;
+      --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+  }
+  :root[data-theme="light"]{
+    --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+    --ink:#10151c; --muted:#566372; --faint:#8794a2;
+    --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16.5px; line-height:1.62;
+    background-image:radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--bad) 8%, transparent) 0%, transparent 62%);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+
+  .rail{border-bottom:1px solid var(--hair); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter:blur(8px);}
+  .rail .wrap{display:flex; align-items:center; justify-content:space-between; height:56px;}
+  .mark{font-family:var(--sans); font-weight:600; letter-spacing:.42em; font-size:13px; color:var(--ink);}
+  .steps{display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;}
+  .steps span{color:var(--faint);}
+  .steps .cur{color:var(--accent);}
+  .steps .done{color:var(--muted);}
+  .steps i{color:var(--faint); font-style:normal;}
+
+  .hero{padding:70px 0 34px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 18px;}
+  h1{font-size:clamp(34px,6vw,52px); line-height:1.04; letter-spacing:-.02em; font-weight:640; margin:0 0 20px; text-wrap:balance;}
+  .thesis{font-size:20px; line-height:1.5; color:var(--muted); margin:0; max-width:64ch; text-wrap:pretty;}
+  .thesis b{color:var(--ink); font-weight:600;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px; font-family:var(--mono); font-size:12px;}
+  .chip{border:1px solid var(--border); border-radius:999px; padding:4px 11px; color:var(--muted); letter-spacing:.03em;}
+  .chip.status{border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); color:var(--ok);}
+  .chip.status::before{content:"●"; margin-right:6px; font-size:9px; vertical-align:1px;}
+
+  section{padding:34px 0;}
+  .kicker{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 6px;}
+  h2{font-size:26px; letter-spacing:-.01em; font-weight:620; margin:0 0 16px; text-wrap:balance;}
+  h3{font-size:16px; margin:0 0 6px; font-weight:620;}
+  p{margin:0 0 15px;}
+  .lead{color:var(--muted);}
+  hr{border:0; border-top:1px solid var(--hair); margin:0;}
+
+  .nums{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .nums div{background:var(--panel); padding:18px 16px;}
+  .nums .n{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .nums .l{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;}
+  @media(max-width:620px){ .nums{grid-template-columns:repeat(2,1fr);} }
+
+  /* attack cards */
+  .atk{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .atk .row{background:var(--panel); padding:20px 20px;}
+  .atk .tgt{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--bad); margin-bottom:8px; display:inline-block;}
+  .atk h3{font-size:16px; margin-bottom:8px;}
+  .atk .path{font-size:14.5px; color:var(--muted); margin:0 0 10px;}
+  .atk .brk{font-size:14.5px; color:var(--ink); margin:0; padding:10px 12px; background:var(--panel2); border-left:3px solid var(--ok); border-radius:8px;}
+  .atk .brk b{color:var(--ok);}
+  .atk code, code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2); border:1px solid var(--hair); border-radius:5px; padding:1px 5px; color:var(--ink);}
+
+  .reg{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .reg .row{background:var(--panel); padding:16px 20px;}
+  .reg .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:6px; display:inline-block;}
+  .tag.low{color:var(--learn);} .tag.res{color:var(--faint);}
+  .reg h3{font-size:15px; margin-bottom:4px;} .reg p{margin:0; font-size:14px; color:var(--muted);}
+
+  .checks{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+  .checks li{display:grid; grid-template-columns:20px 1fr; gap:12px; font-size:15px; color:var(--muted);}
+  .checks .ck{color:var(--ok); font-weight:700;}
+  .checks b{color:var(--ink); font-weight:600;}
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 18px; color:var(--muted); font-size:15px;}
+  .callout b{color:var(--ink);}
+
+  footer{border-top:1px solid var(--hair); padding:34px 0 60px; color:var(--faint); font-size:13px;}
+  .nextlink{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--hair); margin-bottom:22px; flex-wrap:wrap;}
+  .nextlink .lab{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+  .nextlink a{font-size:19px; font-weight:600;}
+  .paths{font-family:var(--mono); font-size:12px; color:var(--faint); line-height:1.8;}
+</style>
+
+<div class="rail"><div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Milestone 07 · Correct parties</p>
+    <h1>The scripts stop playing the human</h1>
+    <p class="thesis">v0's flows were architecturally right about <b>who holds which authority</b> — and operationally wrong about <b>who shows up</b>. Every trusted surface opened with a bearer token a demo driver put in the URL, and the approval ceremony could only be driven by an in-repo agent client. We found out the hard way: an agent driving the live stack <b>approved its own action</b> with dev credentials. M7 puts the correct party in every capacity — real sessions on the trusted surfaces, a <b>server-initiated</b> approval ceremony no agent can touch, device-flow bootstrap that never hands agent code a password, and a test suite whose one simulated human is quarantined and labeled.</p>
+    <div class="meta">
+      <span class="chip status">Shipped · 2026-08-09</span>
+      <span class="chip">close-correct-party-gaps</span>
+      <span class="chip">ADR-0022 · server-initiated CIBA</span>
+      <span class="chip">SR-01 · SR-02 fixed</span>
+    </div>
+  </header>
+  <hr>
+
+  <section>
+    <p class="lead">The forcing incident (2026-08-08): an agent asked to demonstrate the reactive-approval flow hit the <code>428</code>, then — because the repo's dev credentials let any party impersonate any other — initiated CIBA as <code>agent-app</code>, opened the approval payload with a script-held token, and approved <b>itself</b>. Every enforcement primitive held (hash-binding, single-use, audience checks). What failed was <i>party presence</i>: nothing forced the human's capacities to be filled by a human. The gap analysis became the M7 change; the fix is that the wrong party is no longer merely discouraged — it is <b>locked out by the realm</b>.</p>
+  </section>
+
+  <section>
+    <p class="kicker">By the numbers</p>
+    <div class="nums">
+      <div><div class="n">1</div><div class="l">client with the CIBA grant — the approval service. Agents: zero.</div></div>
+      <div><div class="n">0</div><div class="l">URL-carried credentials on trusted surfaces (<code>?token=</code> is gone)</div></div>
+      <div><div class="n">0</div><div class="l">user passwords in agent-side kits or the SDK (grep-enforced)</div></div>
+      <div><div class="n">69</div><div class="l">smoke tests green through the new party boundaries</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The headline</p>
+    <h2>The ceremony changed hands — server-initiated CIBA (ADR-0022)</h2>
+    <p class="lead">The approval service now owns the <b>whole</b> ceremony. When the tools-API fires a <code>428</code>, registration itself initiates CIBA — the approval service's own confidential client, <code>login_hint</code> derived from the token claims it <i>verified</i>, <code>binding_message</code> = the ref. Keycloak delivers the delegation back to the same service (authenticated: the delegation bearer is a realm-signed JWT — SR-02 closed with it). After the human decides, the service polls the token endpoint to complete the ceremony and <b>discards the issued token</b>. The ceremony record is the product; the token has no consumer.</p>
+    <p class="lead">The agent's role in a sensitive action is now, exactly: <b>receive <code>428 {ref, action_token}</code> → wait → retry</b>. Not by convention — <code>agent-app</code> lost the CIBA grant, anonymous DCR clients never had it, and the SDK's <code>require_approval()</code>/<code>drive_ciba_approval()</code> helpers are deleted. There is nothing left for agent code to drive.</p>
+  </section>
+
+  <section>
+    <p class="kicker">The surfaces</p>
+    <h2>Real sign-in on every trusted screen</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span><b>Approval</b> (<code>:8120/approvals</code>) — the ntfy deep link (<code>/approvals#ref</code>, still capability-free per ADR-0007) now lands on a Keycloak login (auth-code + PKCE, confidential <code>approval-ui</code> client). The <code>#ref</code> fragment survives the round-trip inside the signed OAuth <code>state</code>. Decisions exist only inside that session, only by the approval's target user.</span></li>
+      <li><span class="ck">✓</span><span><b>Consent</b> (<code>:8110/consent</code>) — same pattern (<code>broker-ui</code>). The owner of every <code>can_use</code> write and revoke is the <b>session identity</b>, closing the loop on the operator-equals-owner write guard with a real person instead of a script-held token.</span></li>
+      <li><span class="ck">✓</span><span><b>Delegation consent</b> — the <code>act-on-your-behalf</code> consent screen is a <code>realm-export.json</code> fixture (was live-configured by a demo script), so Flow A's explicit consent survives a cold <code>docker compose up</code>.</span></li>
+      <li><span class="ck">✓</span><span><b>Headless bootstrap</b> — RFC 8628 device flow on <code>agent-app</code>: the agent prints a verification link and polls; the human approves the user code in <i>their</i> browser. Test code stopped holding alice's password for bootstrap.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <p class="kicker">The tests had to change too</p>
+    <h2>One simulated human, labeled, quarantined</h2>
+    <p class="lead">CI still needs automation to click Approve. M7 makes that honest: <code>tests/smoke/humankit.py</code> is the <b>one</b> place a human capacity is played by automation — a Playwright driver of the <i>real</i> login page, the <i>real</i> consent and device-verification screens, the <i>real</i> approval surface. Correct in mechanism, simulated in actor. Agent-side kits lost <code>decide()</code>, <code>consent()</code>, <code>ciba_init()</code>, and every password; a grep-able invariant test (<code>test_party_separation.py</code>) fails the build if any of them creeps back.</p>
+    <div class="callout"><b>Also closed while we were in there.</b> <b>SR-01</b>: every service maps errors to stable machine codes; library and upstream detail goes to the audit stream only. <b>SR-02</b>: <code>/ciba/delegate</code> authenticates its caller (realm-signed delegation JWT, initiator pinned to the approval service, body-size cap, 401 before parse). <b>RAG reconciliation</b>: FGA tuple sync decoupled from the vector-seed guard — an OpenFGA store reset no longer leaves every document silently filtered after a restart.</div>
+  </section>
+
+  <section>
+    <p class="kicker">What did not change</p>
+    <h2>The enforcement primitives</h2>
+    <p class="lead">Hash-binding, single-use consumption, the sole-writer consent invariant, audience checks, and the server-side trigger (ADR-0018) are untouched — M7 re-wired <i>who does what</i>, not what is enforced. The one contract change downstream of the ceremony: <code>/consume</code> now proves the presenting user with the caller's validated user-bound token, because the agent-held CIBA token no longer exists to present.</p>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Previous milestone</div><a href="m6-threat-model.html">← M6 · What the Threat Model Found</a></div>
+      <div style="text-align:right"><div class="lab">The decision</div><a href="https://github.com/patrickdaj/prokura/blob/main/docs/adr/0022-the-approval-service-owns-the-ciba-ceremony-server-initiated.md">ADR-0022 →</a></div>
+    </div>
+    <div class="paths">
+      services/approval &nbsp;·&nbsp; websession + server-initiated CIBA + authenticated /ciba/delegate<br>
+      services/token-broker &nbsp;·&nbsp; consent surface session; owner = session identity<br>
+      tests/smoke/humankit.py &nbsp;·&nbsp; the labeled simulated human &nbsp;·&nbsp; test_party_separation.py — the quarantine, enforced
+    </div>
+  </footer>
+</div>

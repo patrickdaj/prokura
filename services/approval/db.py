@@ -21,10 +21,12 @@ CREATE TABLE IF NOT EXISTS approvals (
     status           text        NOT NULL DEFAULT 'pending',
     action_secret    text        NOT NULL,
     delegation_token text,
+    auth_req_id      text,
     created_at       timestamptz NOT NULL DEFAULT now(),
     decided_at       timestamptz,
     consumed_at      timestamptz
 );
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS auth_req_id text;
 """
 
 
@@ -51,13 +53,15 @@ def get(ref: str) -> dict | None:
     with connect() as conn:
         row = conn.execute(
             """SELECT ref, agent, user_id, action, params_json, hash, scopes, status,
-                      action_secret, delegation_token, consumed_at
+                      action_secret, delegation_token, auth_req_id, consumed_at,
+                      EXTRACT(EPOCH FROM now() - created_at) AS age_seconds
                FROM approvals WHERE ref=%s""", (ref,),
         ).fetchone()
     if not row:
         return None
     cols = ["ref", "agent", "user_id", "action", "params_json", "hash", "scopes",
-            "status", "action_secret", "delegation_token", "consumed_at"]
+            "status", "action_secret", "delegation_token", "auth_req_id", "consumed_at",
+            "age_seconds"]
     d = dict(zip(cols, row))
     d["params"] = json.loads(d.pop("params_json"))
     return d
@@ -76,6 +80,14 @@ def list_for_user(user_id: str) -> list[dict]:
                     "params": json.loads(r[3]), "scopes": r[4], "status": r[5],
                     "created_at": r[6].isoformat()})
     return out
+
+
+def set_auth_req_id(ref: str, auth_req_id: str) -> None:
+    """The service-initiated ceremony's handle (M7): stored at registration,
+    polled after the decision."""
+    with connect() as conn:
+        conn.execute("UPDATE approvals SET auth_req_id=%s WHERE ref=%s",
+                     (auth_req_id, ref))
 
 
 def set_delegation(ref: str, token: str) -> bool:

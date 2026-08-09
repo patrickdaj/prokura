@@ -14,9 +14,10 @@ grant-acquisition, per-agent-consent specs).
 | `POST` | `/v1/tokens/{provider}` | the hand-out chain → a provider access token |
 | `POST` | `/v1/grants/{provider}/import` | import a Keycloak-brokered grant into OpenBao |
 | `POST` | `/v1/grants/{provider}/revoke` | revoke a grant (provider + OpenBao + tuples) |
-| `GET`  | `/consent` | per-agent consent screen (authenticated) |
-| `POST` | `/consent` | write the `can_use` tuple (the **sole writer**) |
-| `POST` | `/v1/consent/revoke` | revoke one agent's consent |
+| `GET`  | `/login` · `/callback` · `/whoami` | OIDC session for the consent surface (M7: `broker-ui` client, signed cookie) |
+| `GET`  | `/consent` | per-agent consent screen (session-gated) |
+| `POST` | `/consent` | write the `can_use` tuple (the **sole writer**; owner = the session identity) |
+| `POST` | `/v1/consent/revoke` | revoke one agent's consent (session-only) |
 
 ## The hand-out chain (`POST /v1/tokens/{provider}`)
 
@@ -35,7 +36,8 @@ grant-acquisition, per-agent-consent specs).
   during a refresh.
 - The broker is the **only** writer of the `can_use` tuple — `POST /consent` enforces
   `operator == owner` at write time (ADR-0001), so consent, not registration, is the gate
-  (ADR-0012). Acquisition builds on Keycloak brokering rather than a parallel path (ADR-0011).
+  (ADR-0012). Since M7 the owner in that check is a **real OIDC session identity** on the
+  consent surface — no URL-carried tokens. Acquisition builds on Keycloak brokering rather than a parallel path (ADR-0011).
 
 ## Configuration
 

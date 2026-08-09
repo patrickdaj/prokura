@@ -25,8 +25,7 @@ MCP = "http://localhost:8140"
 REDIRECT = "http://127.0.0.1:9876/callback"
 IMG = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "walkthroughs", "img")
 IMG = os.path.abspath(IMG)
-SCOPE_NAME = "act-on-your-behalf"
-CONSENT_TEXT = "Act on your behalf — call tools and read documents you are authorized to see"
+# The act-on-your-behalf consent scope is a realm fixture (M7) — nothing to configure here.
 
 GRANTED_HTML = """<!doctype html><meta charset=utf-8><title>Signed in</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0d10;
@@ -65,46 +64,17 @@ def start_callback_server(caught):
     return srv
 
 
-def admin_token(c):
-    r = c.post(f"{KC}/realms/master/protocol/openid-connect/token",
-               data={"grant_type": "password", "client_id": "admin-cli",
-                     "username": "admin", "password": "admin"})
-    r.raise_for_status()
-    return r.json()["access_token"]
-
-
-def configure_consent(c):
-    """Idempotent: a consent-screen scope + a fresh client that requires it."""
-    at = admin_token(c)
-    A = {"Authorization": f"Bearer {at}"}
-    scopes = c.get(f"{KC}/admin/realms/{REALM}/client-scopes", headers=A).json()
-    scope = next((s for s in scopes if s["name"] == SCOPE_NAME), None)
-    if not scope:
-        c.post(f"{KC}/admin/realms/{REALM}/client-scopes", headers=A, json={
-            "name": SCOPE_NAME, "protocol": "openid-connect",
-            "description": "Delegated authority granted to the agent",
-            "attributes": {"display.on.consent.screen": "true",
-                           "consent.screen.text": CONSENT_TEXT,
-                           "include.in.token.scope": "false"}}).raise_for_status()
-        scopes = c.get(f"{KC}/admin/realms/{REALM}/client-scopes", headers=A).json()
-        scope = next(s for s in scopes if s["name"] == SCOPE_NAME)
+def register_client(c):
+    """Anonymous DCR only — no admin API, no live config. The realm fixtures do
+    the rest (M7): the anonymous-DCR consent policy forces consentRequired, and
+    the act-on-your-behalf consent-screen scope arrives as a realm default."""
     reg = c.post(f"{KC}/realms/{REALM}/clients-registrations/openid-connect",
                  headers={"Content-Type": "application/json"},
                  json={"client_name": "Claude (MCP client)", "redirect_uris": [REDIRECT],
                        "token_endpoint_auth_method": "none",
                        "grant_types": ["authorization_code", "refresh_token"],
                        "response_types": ["code"]}).json()
-    client_id = reg["client_id"]
-    found = c.get(f"{KC}/admin/realms/{REALM}/clients", headers=A,
-                  params={"clientId": client_id}).json()
-    rep = found[0]
-    rep["consentRequired"] = True
-    c.put(f"{KC}/admin/realms/{REALM}/clients/{rep['id']}", headers=A, json=rep).raise_for_status()
-    # attach the consent-screen scope to THIS client only (not realm-wide, which
-    # would force a consent screen on every DCR client and break scripted logins).
-    c.put(f"{KC}/admin/realms/{REALM}/clients/{rep['id']}/default-client-scopes/{scope['id']}",
-          headers=A).raise_for_status()
-    return client_id
+    return reg["client_id"]
 
 
 def decode(seg):
@@ -115,7 +85,7 @@ def decode(seg):
 def main():
     os.makedirs(IMG, exist_ok=True)
     c = httpx.Client(timeout=20.0)
-    client_id = configure_consent(c)
+    client_id = register_client(c)
 
     verifier = b64(secrets.token_bytes(32))
     challenge = b64(hashlib.sha256(verifier.encode()).digest())

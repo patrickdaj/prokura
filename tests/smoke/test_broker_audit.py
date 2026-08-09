@@ -11,6 +11,7 @@ import httpx
 import pytest
 
 import brokerkit
+import humankit
 from conftest import BROKER_URL, DEMO_USER, LGTM_URL, link_acme
 from prokura import get_provider_token
 
@@ -31,7 +32,7 @@ def issued(keycloak, broker, openbao, openfga):
     link_acme(keycloak)
     brokerkit.import_grant(brokerkit.broker_token(), "acme")
     brokerkit.seed_operator("agent-app", DEMO_USER)
-    brokerkit.consent(brokerkit.user_token(), "agent-app", "acme")
+    humankit.drive_consent("agent-app", "acme")
     out = get_provider_token(brokerkit.broker_token(), "acme", base_url=BROKER_URL)
     assert out["access_token"]
     return out

@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 import brokerkit
+import humankit
 from conftest import BROKER_BAO_TOKEN, DEMO_USER, OPENBAO_URL, link_acme
 
 
@@ -49,7 +50,7 @@ def test_revoked_grant_is_unusable(imported):
     from prokura import ProviderTokenError, get_provider_token
 
     brokerkit.seed_operator("agent-app", DEMO_USER)
-    brokerkit.consent(brokerkit.user_token(), "agent-app", "acme")
+    humankit.drive_consent("agent-app", "acme")
     # sanity: hand-out works before revocation
     get_provider_token(brokerkit.broker_token(), "acme", base_url=brokerkit.BROKER_URL)
 

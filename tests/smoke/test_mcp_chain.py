@@ -1,15 +1,17 @@
-"""M4 chain: through MCP tools, a scripted MCP client obtains a brokered provider
-token (consent-gated) and performs a human-approved email.send (reactive
-challenge → CIBA → approve → retry). The inbound MCP token is never forwarded
-downstream — each tool exchanges it for a correctly-audienced token."""
+"""M4 chain (re-wired in M7): through MCP tools, a scripted MCP client obtains a
+brokered provider token (consent-gated) and performs a human-approved email.send
+(reactive challenge → the human approves in their own session → retry). The
+inbound MCP token is never forwarded downstream — each tool exchanges it for a
+correctly-audienced token. The agent never touches the ceremony."""
 
 import httpx
 import pytest
 
 import approvalkit as ak
 import brokerkit
+import humankit
 import mcpkit
-from conftest import BROKER_URL, DEMO_USER, KEYCLOAK_URL, link_acme
+from conftest import BROKER_URL, DEMO_USER, link_acme
 
 MCP_AGENT = "mcp-server"  # the consent identity: azp of the exchanged tokens
 
@@ -22,7 +24,7 @@ def chain(keycloak, broker, openbao, openfga, mailpit):
     link_acme(keycloak)
     brokerkit.import_grant(brokerkit.broker_token(), "acme")
     brokerkit.seed_operator(MCP_AGENT, DEMO_USER)
-    brokerkit.consent(brokerkit.user_token(), MCP_AGENT, "acme")
+    humankit.drive_consent(MCP_AGENT, "acme")
 
 
 def test_get_provider_token_tool_is_consent_gated(chain):
@@ -61,12 +63,10 @@ def test_reactive_approved_email_sends(chain):
         ref, action_token = challenge["ref"], challenge["action_token"]
         assert ref and action_token
 
-        # 2. The agent drives (client-initiated) CIBA for that ref; the human approves.
-        ut = ak.user_token()
-        auth_req_id = ak.ciba_init(ref, ac)
-        assert ak.wait_delegated(ref, ut, ac) == "delegated"
-        ak.decide(ut, ref, True, ac)  # human approves the server-registered action
-        ak.poll_token(auth_req_id, ac)
+        # 2. The ceremony was initiated SERVER-side at registration (ADR-0022);
+        #    the human approves the server-registered action from the deep link.
+        result = humankit.drive_approval(ref, approve=True)
+        assert "Approved" in result, result
 
         # 3. Retry the tool with the action token -> executed exactly once.
         out, is_error = mcpkit.tool_call(mc, token, "send_email", {**params, "action_token": action_token})

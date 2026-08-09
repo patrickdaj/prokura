@@ -120,7 +120,7 @@ more-trusted component, with the direction of trust and how the crossing is guar
 | Token Broker → **OpenBao** | TCB → TCB | broker token scoped to `secret/data/grants/*` |
 | Token Broker → **provider** (`acme`) | TCB → external | broker re-exchanges as its confidential client for the read-token |
 | Token Broker → **OpenFGA** (write `can_use`) | TCB → TCB | broker is sole writer; `operator == owner` enforced in code |
-| Keycloak CIBA channel → **Approval** `/ciba/delegate` | TCB → TCB | **unauthenticated (SR-02)** — see STRIDE-C / attack tree 3 |
+| Keycloak CIBA channel → **Approval** `/ciba/delegate` | TCB → TCB | authenticated (M7): delegation bearer verified as a realm-signed JWT with `azp=approval-service`, body-size cap, 401 before parse — **SR-02 fixed** |
 | Approval → **Keycloak** CIBA callback | TCB → TCB | bearer = Keycloak-issued delegation token; Keycloak validates |
 | user browser → **Approval UI** `/decide` | user → TCB | authenticated Keycloak session; `row.user_id == sub` |
 | RAG → **OpenFGA** (`batch_check`) | TCB → TCB | subject is `user:{end-user}`, never the agent |
@@ -156,11 +156,11 @@ classes in brackets.
 
 | | Threat → mitigation |
 |---|---|
-| **S**poofing | Forged approval decision / spoofed notification [A1/A3] → `/decide` requires an authenticated session with `sub == row.user_id`; ntfy is deny-all, per-user unguessable topics, notification carries only ref + deep link. **`/ciba/delegate` is unauthenticated (SR-02)** — but a forged call only lets a caller who already knows the 96-bit `ref` win the once-only `pending→delegated` step; it cannot approve (see attack tree 3) |
+| **S**poofing | Forged approval decision / spoofed notification [A1/A3] → `/decide` requires an authenticated session with `sub == row.user_id`; ntfy is deny-all, per-user unguessable topics, notification carries only ref + deep link. `/ciba/delegate` authenticates its caller (realm-signed delegation JWT, `azp` = the approval service's own CIBA client — **SR-02 fixed, M7**) |
 | **T**ampering | Agent alters the action after approval [A1] → tools-API hash-verifies `{action,params}` against the approved hash; mismatch refused (409) |
 | **R**epudiation | User denies approving → every register/delegate/decide/consume audited with `ref` + correlation |
 | **I**nfo disclosure | Agent-authored prose reaches the human, or params leak in the notification [A1] → UI renders service-held payload only; `binding_message` is a hex-only ref (`^apr-[0-9a-f]{24}$`); notification carries no params |
-| **D**oS | Approval spam / delegate-race [A1] → self-inflicted (agent owns the ref); 30 s CIBA timeout aborts cleanly, no token issued |
+| **D**oS | Approval spam [A1] → the ceremony is initiated by the approval service on server-side registration (M7, ADR-0022); an agent can only spam the gated tool it is already authorized to call (audited); the 600 s CIBA window expires undecided ceremonies cleanly |
 | **E**levation | Replay an approved action [A1] → approval service atomically consumes the ref (single-use); replay refused (409) |
 
 ### Flow D — FGA-filtered RAG
@@ -198,10 +198,10 @@ classes in brackets.
 **Goal:** execute a sensitive action without genuine approval. **Paths:**
 - Forge a decision → blocked: `/decide` needs an authenticated session with `sub == row.user_id`.
 - Spoof the notification → blocked: ntfy deny-all, unguessable per-user topic, no params in the payload; a fabricated publish changes no state.
-- **Forge `/ciba/delegate` (SR-02)** → the receiver is unauthenticated, so a caller **who already knows the 96-bit `ref`** (the owning agent, or an on-network attacker who observed it) can win the once-only `pending→delegated` transition with an attacker-chosen token. **But** this cannot *approve*: the decision still requires the real user's authenticated `/decide`, and the relay to Keycloak's callback fails on an invalid delegation token. **Net impact: DoS of that one approval.** **Breaking controls:** authenticated `/decide`; Keycloak validates the delegation token on callback; hash-verify + atomic single-use on `consume`.
+- **Forge `/ciba/delegate`** → **closed (M7, SR-02 fixed):** the receiver verifies the delegation bearer as a realm-signed JWT whose `azp` is the approval service's own CIBA client before parsing anything; an unauthenticated or foreign-initiator call gets 401/403 and changes no state. (Historical impact was bounded to DoS of one approval; now it is nothing.)
 - Replay an approved action → blocked: atomic single-use consume (409).
 
-**Recommended fix (v1):** authenticate the `/ciba/delegate` caller as Keycloak (SR-02).
+**Fixed (M7):** the `/ciba/delegate` caller is authenticated (realm-signed delegation JWT, `azp=approval-service`).
 
 ### 4. RAG confused-deputy over-sharing
 **Goal:** make the agent surface a document the user may not see. **Path:** craft a query so a protected doc is the top embedding hit → the agent (high-privilege) retrieves it → hand it to the model. **Breaking control:** authorization is evaluated **as the end user** (`batch_check` subject `user:{sub}`) *after* ranking; the top hit is filtered when the user holds no `viewer` tuple — proven by `test_protected_doc_is_the_top_hit_but_never_leaks` (`allowed < candidates`). **Residual:** §11 acknowledges the demo-grade embedder and the seeded (vs live-Drive) corpus; neither weakens the enforcement path.
@@ -229,7 +229,7 @@ requirement / test / config) or an **accepted residual**. No orphan threats.
 | Broker = concentrated point of trust | least-privilege (scoped token, `operator==owner`) bounds it; can't remove concentration single-node | isolation, per-tenant brokers, HSM |
 | No rate-limiting (token/DCR/approval flooding) | non-production; not exposed to the internet | gateway rate limits |
 | Mock `acme` session stretched to 30 days | demo convenience; stated in TTL table | real provider refresh/rotation |
-| **SR-02** `/ciba/delegate` unauthenticated | bounded to DoS on an approval whose 96-bit `ref` the caller already knows | verify Keycloak-signed channel caller |
+| **SR-02** `/ciba/delegate` unauthenticated | **fixed (M7)** — caller verified via realm-signed delegation JWT + `azp` check + body cap | — |
 | **SR-03** no `/rag/search` size cap | offline linear-cost embedder | explicit input bounds |
 
 Code-enforced (not model/config) invariants named as **trusted-code assumptions**:

@@ -7,12 +7,13 @@ The action is gated twice: the bearer must be addressed to this resource
 (aud=agent-tools-api — the M1 defense), AND the presented action token must map
 to an approved, unconsumed reference whose hash matches this exact action.
 
-Reactive approval (M4): the approval **trigger** lives here, not on the agent. A
-call arriving WITHOUT an action_token is refused with a `428` `approval_required`
-challenge — and the tools-API itself registers the exact `{action, params}` it
-observed with the approval service, returning the reference id + action token for
-the agent to drive CIBA and retry. The action that gets approved is the one this
-server saw, never one the agent described.
+Reactive approval (M4, re-wired in M7): the approval **trigger** lives here, not
+on the agent. A call arriving WITHOUT an action_token is refused with a `428`
+`approval_required` challenge — the tools-API registers the exact `{action,
+params}` it observed with the approval service, which initiates the CIBA
+ceremony itself (ADR-0022). The agent's whole role is: wait, then retry with the
+returned action token. The action that gets approved is the one this server saw,
+never one the agent described.
 """
 
 import os
@@ -49,33 +50,36 @@ def healthz() -> dict:
 @app.post("/tools/email/send")
 async def email_send(request: Request, authorization: str | None = Header(default=None)) -> JSONResponse:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise _Http(401, "missing bearer token")
-    ciba_token = authorization.split(" ", 1)[1]
+        raise _Http(401, "missing_token")
+    user_token = authorization.split(" ", 1)[1]
     try:
-        validation.verify_bearer(ciba_token)         # aud=agent-tools-api (M1 defense)
-    except validation.TokenInvalid as e:
-        raise _Http(401, f"invalid token: {e}")
-    except validation.WrongAudience as e:
-        raise _Http(403, f"wrong audience: {e}")
+        validation.verify_bearer(user_token)         # aud=agent-tools-api (M1 defense)
+    except validation.TokenInvalid:
+        # SR-01: stable codes only; the library detail stays server-side.
+        raise _Http(401, "invalid_token")
+    except validation.WrongAudience:
+        raise _Http(403, "wrong_audience")
 
     body = await request.json()
     action_token = body.get("action_token", "")
     params = {k: body.get(k) for k in ("to", "subject", "body")}
     if not all(params.values()):
-        raise _Http(400, "to, subject, body required")
+        raise _Http(400, "missing_fields")
 
-    # Reactive approval (M4): no action token means the agent has not (yet) been
-    # approved. The trigger is HERE, not on the agent — we register the exact
-    # action we observed with the approval service and challenge with 428. The
-    # agent drives CIBA for this ref and retries with the returned action token.
+    # Reactive approval (M4): no action token means the caller has not (yet)
+    # been approved. The trigger is HERE, not on the agent — we register the
+    # exact action we observed with the approval service and challenge with 428.
     if not action_token:
+        # M7 (ADR-0022): registration now also makes the approval service
+        # initiate the CIBA ceremony server-side. The agent's next step is only
+        # to wait and retry with the action token — nothing else exists for it.
         with tracer().start_as_current_span("approval.register") as span:
             span.set_attribute("prokura.action", "email.send")
             reg = httpx.post(f"{config.APPROVAL_URL}/register",
                              headers={"Authorization": authorization},
-                             json={"action": "email.send", "params": params}, timeout=10.0)
+                             json={"action": "email.send", "params": params}, timeout=15.0)
         if reg.status_code != 200:
-            raise _Http(502, f"approval registration failed: {reg.status_code}")
+            raise _Http(502, "approval_registration_failed")
         j = reg.json()
         # 428 Precondition Required: the request must first satisfy the human-approval
         # precondition. The action that will be approved is the one registered above.
@@ -84,15 +88,18 @@ async def email_send(request: Request, authorization: str | None = Header(defaul
 
     # Verify hash + single-use against the approval service. This is the gate:
     # the action must match exactly what the human approved, and be unconsumed.
+    # Our validated bearer proves WHICH user the caller acts for (M7: the
+    # CIBA-issued token no longer exists on the agent side).
     with tracer().start_as_current_span("approval.consume") as span:
         span.set_attribute("prokura.action", "email.send")
         r = httpx.post(f"{config.APPROVAL_URL}/consume", json={
-            "action_token": action_token, "ciba_token": ciba_token,
+            "action_token": action_token, "user_token": user_token,
             "action": "email.send", "params": params}, timeout=10.0)
     if r.status_code != 200:
-        detail = r.json().get("error", r.text[:150]) if r.headers.get("content-type","").startswith("application/json") else r.text[:150]
-        raise _Http(r.status_code if r.status_code in (401, 403, 409) else 502,
-                    f"approval refused: {detail}")
+        # Relay the approval service's stable machine code (SR-01: never free text).
+        code = r.json().get("error", "approval_refused") if r.headers.get(
+            "content-type", "").startswith("application/json") else "approval_refused"
+        raise _Http(r.status_code if r.status_code in (401, 403, 409) else 502, code)
 
     # Approved, matched, and consumed — send through the Mailpit sink.
     with tracer().start_as_current_span("email.send"):

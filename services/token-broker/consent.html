@@ -65,12 +65,12 @@
     </div>
   </div>
 <script>
-  // Demo driver passes the authenticated session token + consent target as query
-  // params (a production deployment would gate this page behind an OIDC redirect).
+  // M7: the session cookie is the only credential — no ?token= anywhere. The
+  // consent TARGET (agent/provider/scopes) still arrives as query params; the
+  // OWNER is whoever the authenticated session says it is.
   const q = new URLSearchParams(location.search);
   const agent = q.get("agent") || "—", provider = q.get("provider") || "—";
   const scopes = (q.get("scopes") || "").split(/\s+/).filter(Boolean);
-  const token = q.get("token") || "";
   document.getElementById("agent").textContent = agent;
   document.getElementById("provider").textContent = provider;
   const sc = document.getElementById("scopes");
@@ -78,12 +78,21 @@
     const el = document.createElement("span"); el.className = "chip"; el.textContent = s; sc.appendChild(el);
   }); else sc.textContent = "all granted";
   const result = document.getElementById("result");
+  function toLogin() {
+    const t = new URLSearchParams();
+    if (q.get("agent")) t.set("agent", q.get("agent"));
+    if (q.get("provider")) t.set("provider", q.get("provider"));
+    if (q.get("scopes")) t.set("scopes", q.get("scopes"));
+    location.href = "/login" + (t.toString() ? "?" + t.toString() : "");
+  }
+  fetch("/whoami").then(r => { if (r.status === 401) toLogin(); });
   document.getElementById("allow").onclick = async () => {
     const r = await fetch("/consent", {
       method: "POST",
-      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agent, provider }),
     });
+    if (r.status === 401) return toLogin();
     const body = await r.json().catch(() => ({}));
     result.className = "result " + (r.ok ? "ok" : "err");
     result.textContent = r.ok ? "✓ " + agent + " may now use your " + provider + " grant."

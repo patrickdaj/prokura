@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 import brokerkit
+import humankit
 from conftest import BROKER_URL, DEMO_USER, link_acme
 from prokura import ConsentDenied, ScopeExceeded, get_provider_token
 
@@ -26,7 +27,7 @@ def consented(keycloak, broker, openbao, openfga):
     link_acme(keycloak)
     brokerkit.import_grant(brokerkit.broker_token(), "acme")
     brokerkit.seed_operator("agent-app", DEMO_USER)
-    brokerkit.consent(brokerkit.user_token(), "agent-app", "acme")
+    humankit.drive_consent("agent-app", "acme")
 
 
 def test_happy_path_returns_short_lived_provider_token(consented):
@@ -41,7 +42,11 @@ def test_happy_path_returns_short_lived_provider_token(consented):
 
 def test_wrong_audience_refused(consented):
     # A plain user token (aud != token-broker) must be refused by the broker.
-    ut = brokerkit.user_token()
+    # Minted with scope=openid only — the kit's default bootstrap now carries
+    # the audience scopes, which would make the token legitimately brokered.
+    from conftest import KEYCLOAK_URL, drive_login
+    ut = drive_login(KEYCLOAK_URL, client_id=brokerkit.AGENT,
+                     client_secret=brokerkit.SECRET, scope="openid")["access_token"]
     with pytest.raises(ConsentDenied):
         get_provider_token(ut, "acme", base_url=BROKER_URL)
 
@@ -54,15 +59,14 @@ def test_over_broad_scope_refused_without_contacting_provider(consented):
 
 
 def test_missing_consent_refused(consented):
-    # Revoke consent, then the same agent is refused; restore afterwards.
-    ut = brokerkit.user_token()
-    brokerkit.revoke_consent(ut, "agent-app", "acme")
+    # The human revokes consent in her session; the agent is then refused.
+    humankit.revoke_consent("agent-app", "acme")
     try:
         bt = brokerkit.broker_token()
         with pytest.raises(ConsentDenied):
             get_provider_token(bt, "acme", base_url=BROKER_URL)
     finally:
-        brokerkit.consent(ut, "agent-app", "acme")
+        humankit.drive_consent("agent-app", "acme")
 
 
 def test_scope_refusal_returns_403_not_500(consented):

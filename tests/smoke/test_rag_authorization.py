@@ -21,11 +21,11 @@ def stack(keycloak, rag, openfga):
 
 
 def _alice_rag_token(c) -> str:
-    return ragkit.rag_token(ragkit.mcp_token(c, "alice", "alice"))
+    return ragkit.rag_token(ragkit.mcp_token(c, "alice"))
 
 
 def _bob_rag_token(c) -> str:
-    return ragkit.rag_token(ragkit.mcp_token(c, "bob", "bob"))
+    return ragkit.rag_token(ragkit.mcp_token(c, "bob"))
 
 
 # --- 6.1 authorization ---------------------------------------------------------
@@ -55,7 +55,7 @@ def test_foreign_audience_token_returns_no_chunks(stack):
     # An aud=mcp-server token is the AGENT's own credential. Presented to the
     # retriever it is refused (F2 defense) — agent identity is insufficient.
     with httpx.Client(follow_redirects=False, timeout=30.0) as c:
-        mcp_tok = ragkit.mcp_token(c, "alice", "alice")
+        mcp_tok = ragkit.mcp_token(c, "alice")
     r = ragkit.search_direct(mcp_tok)
     assert r.status_code == 403, f"foreign-audience token not refused: {r.status_code}"
     assert r.json().get("chunks") == []

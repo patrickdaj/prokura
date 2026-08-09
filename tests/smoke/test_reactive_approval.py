@@ -9,24 +9,10 @@ import httpx
 import pytest
 
 import approvalkit as ak
-from conftest import KEYCLOAK_URL, REALM
-from prokura import exchange
+import humankit
 
-AGENT, SECRET = "agent-app", "agent-app-dev-secret"
-
-
-def tools_token(ut: str) -> str:
-    """A token addressed to the tools-API (aud=agent-tools-api)."""
-    return exchange(ut, "agent-tools-api", base_url=KEYCLOAK_URL, realm=REALM,
-                    client_id=AGENT, client_secret=SECRET)
-
-
-def attempt(tt: str, params: dict, c: httpx.Client, action_token: str | None = None) -> httpx.Response:
-    body = dict(params)
-    if action_token:
-        body["action_token"] = action_token
-    return c.post(f"{ak.TOOLS_URL}/tools/email/send",
-                  headers={"Authorization": f"Bearer {tt}"}, json=body)
+tools_token = ak.tools_token
+attempt = ak.attempt
 
 
 def subjects_in_mailpit(c: httpx.Client) -> list[str]:
@@ -42,7 +28,7 @@ def tools(keycloak, mailpit):
 def test_unapproved_call_is_challenged_not_executed(tools):
     params = {"to": "boss@prokura.local", "subject": "Reactive unapproved probe", "body": "no"}
     with httpx.Client(timeout=20.0) as c:
-        tt = tools_token(ak.user_token())
+        tt = tools_token()
         r = attempt(tt, params, c)
         # 428 Precondition Required: approval must be satisfied first.
         assert r.status_code == 428, r.text
@@ -54,17 +40,15 @@ def test_unapproved_call_is_challenged_not_executed(tools):
 
 
 def _challenge_and_approve(params: dict, c: httpx.Client) -> tuple[str, str]:
-    """Reactive path: attempt (server registers + challenges) → CIBA → approve.
-    Returns (tools_token, action_token) ready for a retry."""
-    ut = ak.user_token()
-    tt = tools_token(ut)
+    """Reactive path: attempt (server registers + challenges + initiates the
+    ceremony) → the human approves from the surface. Returns
+    (tools_token, action_token) ready for a retry."""
+    tt = tools_token()
     r = attempt(tt, params, c)
     assert r.status_code == 428, r.text
     ref, action_token = r.json()["ref"], r.json()["action_token"]
-    auth_req_id = ak.ciba_init(ref, c)
-    ak.wait_delegated(ref, ut, c)
-    ak.decide(ut, ref, True, c)
-    ak.poll_token(auth_req_id, c)
+    result = humankit.drive_approval(ref, approve=True)
+    assert "Approved" in result, result
     return tt, action_token
 
 

@@ -1,20 +1,27 @@
-"""Shared helpers for the M3 human-approval smoke tests: register a payload,
-drive CIBA, decide in the trusted surface, poll, and call the gated tool."""
+"""AGENT-SIDE helpers for the human-approval smoke tests (M7 quarantine, D6).
+
+This kit holds only what an agent can legitimately do: bootstrap its delegated
+user token via the device flow (its own client credential; the human approves
+the user code in THEIR browser — humankit), exchange audiences, call the gated
+tool, and retry with an action token after a 428.
+
+Deliberately ABSENT (moved to the human, i.e. humankit): CIBA initiation
+(server-side since ADR-0022 — no agent client even has the grant), approval
+decisions, and every user password."""
 
 import base64
 import hashlib
 import json
-import time
 
 import httpx
 
-from conftest import KEYCLOAK_URL, REALM, drive_login
+from conftest import KEYCLOAK_URL, REALM, device_bootstrap
+from prokura import exchange
 
 APPROVAL_URL = "http://localhost:8120"
 TOOLS_URL = "http://localhost:8130"
 MAILPIT_URL = "http://localhost:8025"
 AGENT, SECRET = "agent-app", "agent-app-dev-secret"
-CIBA_GRANT = "urn:openid:params:grant-type:ciba"
 TOPIC_SALT = "prokura-approval-dev-salt"  # matches the approval service default
 
 
@@ -24,58 +31,43 @@ def claims(t: str) -> dict:
 
 
 def user_token() -> str:
-    return drive_login(KEYCLOAK_URL, client_id=AGENT, client_secret=SECRET)["access_token"]
+    """The agent's delegated user token, via RFC 8628 device flow: the agent
+    holds only its own client secret; alice approves in her own session. The
+    audience scopes ride along so the consent she grants covers later
+    exchanges (agent-app is consentRequired since M7)."""
+    return device_bootstrap(AGENT, SECRET,
+                            scope="openid tools-audience broker-audience")["access_token"]
+
+
+def tools_token(ut: str | None = None) -> str:
+    """Exchange the delegated token for the tools-API audience (RFC 8693)."""
+    return exchange(ut or user_token(), "agent-tools-api",
+                    base_url=KEYCLOAK_URL, realm=REALM,
+                    client_id=AGENT, client_secret=SECRET)
 
 
 def register(ut: str, action: str, params: dict, c: httpx.Client) -> tuple[str, str]:
+    """Register directly with the approval service (mechanism tests; the
+    production trigger is the tools-api's 428 path). Registration now also
+    initiates the server-side CIBA ceremony."""
     r = c.post(f"{APPROVAL_URL}/register", headers={"Authorization": f"Bearer {ut}"},
                json={"action": action, "params": params})
     r.raise_for_status()
     return r.json()["ref"], r.json()["action_token"]
 
 
-def ciba_init(ref: str, c: httpx.Client, requested_expiry: int | None = None) -> str:
-    data = {"client_id": AGENT, "client_secret": SECRET, "scope": "openid tools-audience",
-            "login_hint": "alice", "binding_message": ref}
-    if requested_expiry:
-        data["requested_expiry"] = str(requested_expiry)
-    r = c.post(f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/ext/ciba/auth", data=data)
-    r.raise_for_status()
-    return r.json()["auth_req_id"]
+def attempt(tt: str, params: dict, c: httpx.Client,
+            action_token: str | None = None) -> httpx.Response:
+    """Call the gated tool; without an action token this draws the 428."""
+    body = dict(params)
+    if action_token:
+        body["action_token"] = action_token
+    return c.post(f"{TOOLS_URL}/tools/email/send",
+                  headers={"Authorization": f"Bearer {tt}"}, json=body)
 
 
-def wait_delegated(ref: str, ut: str, c: httpx.Client, timeout: float = 10.0) -> str:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        s = c.get(f"{APPROVAL_URL}/approval/{ref}", headers={"Authorization": f"Bearer {ut}"})
-        if s.status_code == 200 and s.json().get("status") == "delegated":
-            return "delegated"
-        time.sleep(0.5)
-    return "not-delegated"
-
-
-def decide(ut: str, ref: str, approve: bool, c: httpx.Client) -> httpx.Response:
-    return c.post(f"{APPROVAL_URL}/approval/{ref}/decide", headers={"Authorization": f"Bearer {ut}"},
-                  json={"decision": "approve" if approve else "deny"})
-
-
-def poll_token(auth_req_id: str, c: httpx.Client, tries: int = 8) -> tuple[str | None, str]:
-    for _ in range(tries):
-        r = c.post(f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/token",
-                   data={"grant_type": CIBA_GRANT, "auth_req_id": auth_req_id,
-                         "client_id": AGENT, "client_secret": SECRET})
-        if r.status_code == 200:
-            return r.json()["access_token"], "ok"
-        err = r.json().get("error", "") if r.headers.get("content-type","").startswith("application/json") else r.text[:80]
-        if err not in ("authorization_pending", "slow_down"):
-            return None, err
-        time.sleep(2)
-    return None, "timeout-polling"
-
-
-def send_email(ciba_token: str, action_token: str, params: dict, c: httpx.Client) -> httpx.Response:
-    return c.post(f"{TOOLS_URL}/tools/email/send", headers={"Authorization": f"Bearer {ciba_token}"},
-                  json={"action_token": action_token, **params})
+def send_email(tt: str, action_token: str, params: dict, c: httpx.Client) -> httpx.Response:
+    return attempt(tt, params, c, action_token=action_token)
 
 
 def topic_for(user: str = "alice") -> str:
@@ -84,12 +76,16 @@ def topic_for(user: str = "alice") -> str:
 
 
 def approved_tokens(action: str, params: dict, c: httpx.Client) -> tuple[str, str]:
-    """Full happy path helper: returns (ciba_token, action_token) after approval."""
-    ut = user_token()
-    ref, action_token = register(ut, action, params, c)
-    auth_req_id = ciba_init(ref, c)
-    wait_delegated(ref, ut, c)
-    decide(ut, ref, True, c)
-    ciba_token, status = poll_token(auth_req_id, c)
-    assert ciba_token, f"no token: {status}"
-    return ciba_token, action_token
+    """Full reactive happy path: 428 challenge -> the HUMAN approves from the
+    surface (humankit) -> returns (tools_token, action_token) ready to retry.
+    `action` is fixed to email.send by the tools-api; kept for call-site clarity."""
+    import humankit
+
+    assert action == "email.send"
+    tt = tools_token()
+    r = attempt(tt, params, c)
+    assert r.status_code == 428, f"expected 428 challenge: {r.status_code} {r.text[:150]}"
+    j = r.json()
+    result = humankit.drive_approval(j["ref"], approve=True)
+    assert "Approved" in result, result
+    return tt, j["action_token"]

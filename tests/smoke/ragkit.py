@@ -8,11 +8,7 @@ directly. The crafted query makes the protected ``secret-roadmap`` the top embed
 hit, so the leakage assertions are meaningful."""
 
 import base64
-import hashlib
-import html
 import json
-import re
-import secrets
 
 import httpx
 
@@ -27,9 +23,6 @@ REDIRECT = "http://127.0.0.1:9876/callback"
 ADVERSARIAL_QUERY = "When does the Meridian acquisition close? acquisition timeline roadmap"
 # A phrase that appears ONLY in the protected doc — its presence in an answer is a leak.
 SECRET_MARKER = "Meridian"
-
-_b64 = lambda x: base64.urlsafe_b64encode(x).rstrip(b"=").decode()  # noqa: E731
-
 
 def token_claims(token: str) -> dict:
     p = token.split(".")[1]
@@ -48,31 +41,12 @@ def _register(c: httpx.Client) -> str:
     return r.json()["client_id"]
 
 
-def mcp_token(c: httpx.Client, user: str, password: str) -> str:
-    """An aud=mcp-server access token for ``user`` (DCR + OAuth 2.1 + PKCE)."""
-    client_id = _register(c)
-    verifier = _b64(secrets.token_bytes(32))
-    challenge = _b64(hashlib.sha256(verifier.encode()).digest())
-    auth = c.get(f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/auth", params={
-        "client_id": client_id, "response_type": "code", "redirect_uri": REDIRECT,
-        "scope": "openid", "state": "s", "code_challenge": challenge,
-        "code_challenge_method": "S256", "resource": f"{MCP_URL}/mcp"})
-    assert auth.status_code == 200, auth.text[:200]
-    cookies = dict(sc.split(";", 1)[0].split("=", 1)
-                   for sc in auth.headers.get_list("set-cookie"))
-    m = re.search(r'id="kc-form-login"[^>]*action="([^"]+)"', auth.text)
-    assert m, "no kc-form-login action on the login page"
-    r = c.post(html.unescape(m.group(1)),
-               data={"username": user, "password": password},
-               headers={"Cookie": "; ".join(f"{k}={v}" for k, v in cookies.items())})
-    loc = r.headers.get("location", "")
-    assert loc.startswith(REDIRECT), f"login did not redirect: {r.status_code} {loc[:120]}"
-    code = httpx.URL(loc).params.get("code")
-    tok = c.post(f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/token", data={
-        "grant_type": "authorization_code", "client_id": client_id, "code": code,
-        "redirect_uri": REDIRECT, "code_verifier": verifier, "resource": f"{MCP_URL}/mcp"})
-    assert tok.status_code == 200, tok.text[:200]
-    return tok.json()["access_token"]
+def mcp_token(c: httpx.Client, user: str) -> str:
+    """An aud=mcp-server access token for ``user`` (DCR + OAuth 2.1 + PKCE). The
+    human leg (login + DCR-client consent screen) is humankit's (M7 quarantine:
+    no password here)."""
+    import mcpkit
+    return mcpkit.login(c, _register(c), user=user)
 
 
 def rag_token(mcp_tok: str) -> str:

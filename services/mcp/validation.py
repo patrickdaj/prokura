@@ -23,6 +23,10 @@ class WrongAudience(Exception):
     pass
 
 
+class InsufficientScope(Exception):
+    pass
+
+
 def verify_bearer(token: str) -> dict:
     try:
         key = _jwks_client.get_signing_key_from_jwt(token)
@@ -34,4 +38,8 @@ def verify_bearer(token: str) -> dict:
     aud = [aud] if isinstance(aud, str) else (aud or [])
     if config.MCP_AUDIENCE not in aud:
         raise WrongAudience(f"aud={aud} does not include {config.MCP_AUDIENCE!r}")
+    # Scope gate on top of the audience check: aud=mcp-server says the token was
+    # minted for this resource; mcp:access says the grant authorizes MCP use.
+    if config.MCP_SCOPE not in claims.get("scope", "").split():
+        raise InsufficientScope(f"token scope lacks {config.MCP_SCOPE!r}")
     return claims

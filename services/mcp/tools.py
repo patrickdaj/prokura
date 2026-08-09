@@ -38,9 +38,11 @@ TOOL_SPECS = [
     {
         "name": "send_email",
         "description": "Send an email. A sensitive action: the first call is refused "
-                       "with an approval_required challenge (ref + action_token); "
-                       "obtain human approval via CIBA for that ref, then call again "
-                       "with the action_token to execute.",
+                       "with an approval_required challenge (ref + action_token) and "
+                       "the human is notified out-of-band. Wait for them to decide, "
+                       "then call again with the action_token to execute. There is "
+                       "nothing else for you to do — the approval happens entirely "
+                       "outside your reach.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -88,7 +90,7 @@ def get_provider_token(inbound_token: str, claims: dict, args: dict) -> dict:
         except ExchangeError as e:
             audit.emit(decision="exchange_failed", user=user, agent=config.MCP_CLIENT_ID,
                        tool="get_provider_token", detail=str(e))
-            raise ToolError(f"token exchange failed: {e}") from e
+            raise ToolError("token_exchange_failed") from e
         r = httpx.post(f"{config.BROKER_URL}/v1/tokens/{provider}",
                        headers={"Authorization": f"Bearer {broker_token}"},
                        json={"scopes": scopes}, timeout=20.0)
@@ -119,7 +121,7 @@ def send_email(inbound_token: str, claims: dict, args: dict) -> dict:
         except ExchangeError as e:
             audit.emit(decision="exchange_failed", user=user, agent=config.MCP_CLIENT_ID,
                        tool="send_email", detail=str(e))
-            raise ToolError(f"token exchange failed: {e}") from e
+            raise ToolError("token_exchange_failed") from e
         body = dict(params)
         if action_token:
             body["action_token"] = action_token
@@ -127,15 +129,19 @@ def send_email(inbound_token: str, claims: dict, args: dict) -> dict:
                        headers={"Authorization": f"Bearer {tools_token}"},
                        json=body, timeout=20.0)
 
-    # Reactive approval challenge (the tools-API registered the real action).
+    # Reactive approval challenge (the tools-API registered the real action and
+    # the approval service already initiated the ceremony — ADR-0022). The
+    # agent's ONLY move is to wait for the human and retry with the token.
     if r.status_code == 428:
         j = r.json()
         audit.emit(decision="approval_required", user=user, agent=config.MCP_CLIENT_ID,
                    tool="send_email", detail=j.get("ref"))
         return {"status": "approval_required", "ref": j.get("ref"),
                 "action_token": j.get("action_token"),
-                "message": "Approval required. Complete CIBA for this ref (binding_message=ref), "
-                           "then call send_email again with the action_token."}
+                "message": "Approval required. The user has been notified and will "
+                           "approve or deny in their own session. Wait, then call "
+                           "send_email again with this action_token. Do not attempt "
+                           "to obtain the approval yourself."}
     if r.status_code != 200:
         detail = _err(r)
         audit.emit(decision="send_refused", user=user, agent=config.MCP_CLIENT_ID,
@@ -166,7 +172,7 @@ def rag_search(inbound_token: str, claims: dict, args: dict) -> dict:
         except ExchangeError as e:
             audit.emit(decision="exchange_failed", user=user, agent=config.MCP_CLIENT_ID,
                        tool="rag_search", detail=str(e))
-            raise ToolError(f"token exchange failed: {e}") from e
+            raise ToolError("token_exchange_failed") from e
         r = httpx.post(f"{config.RAG_URL}/rag/search",
                        headers={"Authorization": f"Bearer {rag_token}"},
                        json=body, timeout=20.0)
@@ -192,6 +198,10 @@ def dispatch(name: str, inbound_token: str, claims: dict, args: dict) -> dict:
 
 
 def _err(r: httpx.Response) -> str:
+    """SR-01: relay only the downstream service's stable machine code (every
+    prokura service now emits {error: <code>}); free text never propagates."""
     if r.headers.get("content-type", "").startswith("application/json"):
-        return r.json().get("error", r.text[:150])
-    return r.text[:150]
+        code = r.json().get("error", "")
+        if isinstance(code, str) and code and len(code) <= 64:
+            return code
+    return "upstream_error"

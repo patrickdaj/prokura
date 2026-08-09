@@ -186,6 +186,11 @@ services:
       OPENFGA_URL: http://openfga:8080
       FGA_STORE_NAME: prokura
       DATABASE_URL: postgresql://${POSTGRES_USER:-prokura}:${POSTGRES_PASSWORD:-prokura-dev}@postgres:5432/${POSTGRES_DB:-prokura}
+      # M7: consent surface session (broker-ui client).
+      BROKER_PUBLIC_URL: http://localhost:8110
+      UI_CLIENT_ID: broker-ui
+      UI_CLIENT_SECRET: ${BROKER_UI_CLIENT_SECRET:-broker-ui-dev-secret}
+      SESSION_SECRET: ${BROKER_SESSION_SECRET:-broker-session-dev-secret}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
       OTEL_SERVICE_NAME: token-broker
     depends_on:
@@ -215,6 +220,13 @@ services:
       NTFY_USER: prokura-approval
       NTFY_APPROVAL_PASSWORD: ${NTFY_APPROVAL_PASSWORD:-prokura-approval-dev}
       APPROVAL_PUBLIC_URL: http://localhost:8120
+      # M7: surface session (approval-ui client) + server-initiated CIBA
+      # (approval-service is the realm's only CIBA-grant client, ADR-0019).
+      UI_CLIENT_ID: approval-ui
+      UI_CLIENT_SECRET: ${APPROVAL_UI_CLIENT_SECRET:-approval-ui-dev-secret}
+      SESSION_SECRET: ${APPROVAL_SESSION_SECRET:-approval-session-dev-secret}
+      CIBA_CLIENT_ID: approval-service
+      CIBA_CLIENT_SECRET: ${APPROVAL_CIBA_CLIENT_SECRET:-approval-service-dev-secret}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
       OTEL_SERVICE_NAME: approval
     depends_on:

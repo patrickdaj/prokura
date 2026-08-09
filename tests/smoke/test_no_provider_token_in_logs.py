@@ -7,6 +7,7 @@ import subprocess
 import pytest
 
 import brokerkit
+import humankit
 from conftest import BROKER_BAO_TOKEN, DEMO_USER, OPENBAO_URL, link_acme
 
 import httpx
@@ -17,7 +18,7 @@ def stored_credential(keycloak, broker, openbao, openfga):
     link_acme(keycloak)
     brokerkit.import_grant(brokerkit.broker_token(), "acme")
     brokerkit.seed_operator("agent-app", DEMO_USER)
-    brokerkit.consent(brokerkit.user_token(), "agent-app", "acme")
+    humankit.drive_consent("agent-app", "acme")
     r = httpx.get(f"{OPENBAO_URL}/v1/secret/data/grants/{DEMO_USER}/acme",
                   headers={"X-Vault-Token": BROKER_BAO_TOKEN}, timeout=10.0)
     return r.json()["data"]["data"]["credential"]

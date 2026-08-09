@@ -24,7 +24,11 @@ def claims(token: str) -> dict:
 
 @pytest.fixture(scope="module")
 def user_token(keycloak: str) -> str:
-    return drive_login(keycloak, client_id=AGENT, client_secret=SECRET)["access_token"]
+    # every scope later exchanges will request must be consent-covered up
+    # front (agent-app is consentRequired since M7)
+    return drive_login(keycloak, client_id=AGENT, client_secret=SECRET,
+                       scope="openid tools:read tools:execute "
+                             "tools-audience broker-audience")["access_token"]
 
 
 def _exchange(user_token: str, audience: str, scopes=()):

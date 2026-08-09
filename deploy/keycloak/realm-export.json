@@ -6,15 +6,27 @@
   "accessTokenLifespanForImplicitFlow": 900,
   "ssoSessionIdleTimeout": 1800,
   "registrationAllowed": false,
-  "defaultDefaultClientScopes": ["basic", "profile", "mcp-audience"],
-  "defaultOptionalClientScopes": ["tools:read", "tools:execute", "broker-audience", "tools-audience", "rag-audience"],
+  "defaultDefaultClientScopes": [
+    "basic",
+    "profile",
+    "mcp-audience",
+    "mcp:access",
+    "act-on-your-behalf"
+  ],
+  "defaultOptionalClientScopes": [
+    "tools:read",
+    "tools:execute",
+    "broker-audience",
+    "tools-audience",
+    "rag-audience"
+  ],
   "eventsEnabled": true,
   "eventsExpiration": 604800,
   "adminEventsEnabled": true,
   "adminEventsDetailsEnabled": true,
   "attributes": {
     "cibaBackchannelTokenDeliveryMode": "poll",
-    "cibaExpiresIn": "30",
+    "cibaExpiresIn": "600",
     "cibaInterval": "5",
     "cibaAuthRequestedUserHint": "login_hint"
   },
@@ -33,9 +45,13 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["default-roles-prokura"],
+      "realmRoles": [
+        "default-roles-prokura"
+      ],
       "clientRoles": {
-        "broker": ["read-token"]
+        "broker": [
+          "read-token"
+        ]
       }
     },
     {
@@ -52,7 +68,9 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["default-roles-prokura"]
+      "realmRoles": [
+        "default-roles-prokura"
+      ]
     }
   ],
   "clientScopes": [
@@ -60,7 +78,10 @@
       "name": "basic",
       "description": "Built-in equivalent: carries the sub claim (declaring clientScopes in an import suppresses Keycloak's own built-ins)",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "false", "display.on.consent.screen": "false" },
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
       "protocolMappers": [
         {
           "name": "sub",
@@ -78,7 +99,10 @@
       "name": "profile",
       "description": "Built-in equivalent: username claim",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
       "protocolMappers": [
         {
           "name": "username",
@@ -99,17 +123,23 @@
     {
       "name": "tools:read",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "true" }
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
     },
     {
       "name": "tools:execute",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "true" }
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
     },
     {
       "name": "broker-audience",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "true" },
+      "attributes": {
+        "include.in.token.scope": "true"
+      },
       "protocolMappers": [
         {
           "name": "token-broker-audience",
@@ -125,7 +155,9 @@
     {
       "name": "tools-audience",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "true" },
+      "attributes": {
+        "include.in.token.scope": "true"
+      },
       "protocolMappers": [
         {
           "name": "agent-tools-api-audience",
@@ -142,7 +174,10 @@
       "name": "mcp-audience",
       "description": "M4 RFC 8707 workaround: Keycloak does not reflect the resource param into aud, so a realm-default client scope binds aud=mcp-server on DCR clients; the MCP server validates it (M1 defense).",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
       "protocolMappers": [
         {
           "name": "mcp-server-audience",
@@ -156,10 +191,56 @@
       ]
     },
     {
+      "name": "mcp:access",
+      "description": "MCP access gate: required scope on inbound MCP tokens, on top of aud=mcp-server. Realm default (anonymous DCR admits only realm defaults). Self-contained (own aud+username mappers): DCR-with-scope REPLACES realm defaults. See services/mcp/README.md.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "mcp-server-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "mcp-server",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "act-on-your-behalf",
+      "description": "M7: the explicit delegation consent scope, persisted as a realm fixture (was flow_a.py live-config). Display-only consent-screen text; grants nothing itself. Realm default so scope-less DCR registrations inherit it.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "Act on your behalf — call tools and read documents you are authorized to see"
+      }
+    },
+    {
       "name": "rag-audience",
       "description": "M5: binds aud=rag-server. mcp-server carries this optional scope so rag_search can exchange an inbound MCP token into a rag-server-audience token; the RAG service validates it (F2 defense) and authorizes as user:{sub}.",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "true" },
+      "attributes": {
+        "include.in.token.scope": "true"
+      },
       "protocolMappers": [
         {
           "name": "rag-server-audience",
@@ -176,7 +257,10 @@
       "name": "broker-read-token",
       "description": "Emits resource_access.broker.roles so a token presented to /broker/{alias}/token passes Keycloak's read-token check (M2 spike finding). The realm omits Keycloak's built-in 'roles' scope, so this is the minimal client-role mapper the broker needs.",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" },
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
       "protocolMappers": [
         {
           "name": "broker read-token role",
@@ -343,14 +427,27 @@
       "protocol": "openid-connect",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["http://localhost/*", "http://127.0.0.1/*"],
-      "webOrigins": ["+"],
-      "defaultClientScopes": ["basic", "profile", "broker-read-token"],
-      "attributes": { "pkce.code.challenge.method": "S256" }
+      "redirectUris": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1:9876/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "broker-read-token"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
     },
     {
       "clientId": "agent-app",
       "name": "Demo agent application",
+      "description": "M7: consentRequired + act-on-your-behalf persist Flow A's explicit consent across cold starts. CIBA grant REMOVED — the approval service owns ceremony initiation (ADR-0022). Device flow enabled for headless bootstrap (RFC 8628).",
       "publicClient": false,
       "enabled": true,
       "protocol": "openid-connect",
@@ -359,11 +456,91 @@
       "standardFlowEnabled": true,
       "serviceAccountsEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["http://localhost/*", "http://127.0.0.1/*"],
-      "defaultClientScopes": ["basic", "profile"],
-      "optionalClientScopes": ["tools:read", "tools:execute", "broker-audience", "tools-audience"],
+      "consentRequired": true,
+      "redirectUris": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1:9876/*"
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "act-on-your-behalf"
+      ],
+      "optionalClientScopes": [
+        "tools:read",
+        "tools:execute",
+        "broker-audience",
+        "tools-audience"
+      ],
       "attributes": {
         "standard.token.exchange.enabled": "true",
+        "oauth2.device.authorization.grant.enabled": "true"
+      }
+    },
+    {
+      "clientId": "approval-ui",
+      "name": "Approval surface session (M7)",
+      "description": "Confidential client for the approval service's own browser login (Authorization Code + PKCE -> signed session cookie). Exact redirect URI only.",
+      "publicClient": false,
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "approval-ui-dev-secret",
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8120/callback"
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "profile"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "broker-ui",
+      "name": "Consent surface session (M7)",
+      "description": "Confidential client for the token broker's consent-screen browser login. Exact redirect URI only.",
+      "publicClient": false,
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "broker-ui-dev-secret",
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8110/callback"
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "profile"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "approval-service",
+      "name": "Approval service CIBA initiator (M7)",
+      "description": "M7: the ONLY CIBA-grant client. The approval service initiates the ceremony at /register and polls after the decision; the token is discarded (ADR-0022). Delegation POSTs carry a realm-signed JWT with azp=approval-service (SR-02 auth).",
+      "publicClient": false,
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "approval-service-dev-secret",
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "defaultClientScopes": [
+        "basic",
+        "profile"
+      ],
+      "attributes": {
         "oidc.ciba.grant.enabled": "true",
         "ciba.backchannel.token.delivery.mode": "poll"
       }
@@ -379,8 +556,13 @@
       "serviceAccountsEnabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "token-broker-dev-secret",
-      "defaultClientScopes": ["basic", "broker-read-token"],
-      "attributes": { "standard.token.exchange.enabled": "true" }
+      "defaultClientScopes": [
+        "basic",
+        "broker-read-token"
+      ],
+      "attributes": {
+        "standard.token.exchange.enabled": "true"
+      }
     },
     {
       "clientId": "agent-tools-api",
@@ -407,9 +589,18 @@
       "serviceAccountsEnabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "mcp-server-dev-secret",
-      "defaultClientScopes": ["basic", "profile"],
-      "optionalClientScopes": ["broker-audience", "tools-audience", "rag-audience"],
-      "attributes": { "standard.token.exchange.enabled": "true" }
+      "defaultClientScopes": [
+        "basic",
+        "profile"
+      ],
+      "optionalClientScopes": [
+        "broker-audience",
+        "tools-audience",
+        "rag-audience"
+      ],
+      "attributes": {
+        "standard.token.exchange.enabled": "true"
+      }
     },
     {
       "clientId": "rag-server",
@@ -423,7 +614,9 @@
       "serviceAccountsEnabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "rag-server-dev-secret",
-      "attributes": { "standard.token.exchange.enabled": "true" }
+      "attributes": {
+        "standard.token.exchange.enabled": "true"
+      }
     }
   ]
 }

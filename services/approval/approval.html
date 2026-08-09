@@ -60,9 +60,10 @@
     </div>
   </div>
 <script>
-  const q = new URLSearchParams(location.search);
-  const ref = q.get("ref") || location.hash.replace("#","");
-  const token = q.get("token") || "";
+  // M7: the session cookie is the only credential — no ?token= anywhere. The
+  // #ref fragment never reaches the server; /login round-trips it in the
+  // signed OAuth state (D3).
+  const ref = location.hash.replace("#","");
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[<>&"]/g, "");
   function state(title, msg, showRef) {
@@ -71,17 +72,25 @@
     s.innerHTML = "<h2>" + title + "</h2><p>" + msg + "</p>" +
       (showRef && ref ? '<div class="ref">' + esc(ref) + "</div>" : "");
   }
+  function toLogin() {
+    location.href = "/login" + (ref ? "?ref=" + encodeURIComponent(ref) : "");
+  }
   async function load() {
-    let r;
+    let who;
     try {
-      r = await fetch("/approval/" + encodeURIComponent(ref), { headers: { "Authorization": "Bearer " + token } });
+      who = await fetch("/whoami");
     } catch (e) {
       return state("Can’t reach the approval service", "Please try again in a moment.");
     }
+    if (who.status === 401) return toLogin();
+    if (!ref) return state("No approval to review", "You’ve reached the approval screen without a specific request. Approvals open from the link in your notification.");
+    const r = await fetch("/approval/" + encodeURIComponent(ref));
     if (r.status === 404) return state("Approval not found", "This request may have expired, or it was already decided. Nothing will run.", true);
-    if (r.status === 401 || r.status === 403) return state("Sign in to review", "This approval opens in your authenticated session — follow the link from your notification while signed in.");
+    if (r.status === 401) return toLogin();
     if (!r.ok) return state("Couldn’t load this approval", "Something went wrong (HTTP " + r.status + ").", true);
     const a = await r.json();
+    if (a.status === "expired")
+      return state("Already expired", "Nobody decided in time — the request lapsed and nothing will run.", true);
     if (a.status && a.status !== "pending" && a.status !== "delegated")
       return state("Already " + esc(a.status), "This request was already decided — nothing further will run.", true);
     $("state").hidden = true; $("approval").hidden = false;
@@ -92,7 +101,7 @@
   async function decide(decision) {
     const result = $("result");
     const r = await fetch("/approval/" + encodeURIComponent(ref) + "/decide", {
-      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ decision }) });
     const b = await r.json().catch(() => ({}));
     result.className = "result " + (r.ok ? "ok" : "err");
@@ -103,9 +112,7 @@
   }
   $("approve").onclick = () => decide("approve");
   $("deny").onclick = () => decide("deny");
-  if (!ref) state("No approval to review", "You’ve reached the approval screen without a specific request. Approvals open from the link in your notification.");
-  else if (!token) state("Sign in to review", "This approval opens in your authenticated session — follow the link from your notification while signed in.");
-  else load();
+  load();
 </script>
 </body>
 </html>

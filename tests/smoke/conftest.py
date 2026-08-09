@@ -73,68 +73,89 @@ def mailpit() -> str:
     return MAILPIT_URL
 
 
-def drive_login(keycloak: str, client_id: str = "smoke-cli", client_secret: str | None = None) -> dict:
-    """Run the full Authorization Code + PKCE flow as a browser would; returns
-    the token response. Shared by smoke, telemetry, and exchange tests. Pass
-    client_id="agent-app" + secret to log in through the confidential agent
-    client (tokens carry azp=agent-app and are exchangeable). Cookies are
-    handled manually —
-    Keycloak marks cookies Secure even on plain-HTTP dev and http.cookiejar
-    refuses to replay them."""
+_login_cache: dict[tuple, tuple[float, dict]] = {}
+
+
+def drive_login(keycloak: str, client_id: str = "smoke-cli",
+                client_secret: str | None = None, user: str = DEMO_USER,
+                scope: str = "openid") -> dict:
+    """Authorization Code + PKCE, with the HUMAN leg (login form, any consent
+    screen) played by humankit in a real browser (M7 quarantine: no user
+    password lives outside humankit). The agent leg — building the request,
+    exchanging the code — runs here. Token responses are cached per
+    (client, user, scope) until near expiry; the suite reuses sessions the way
+    a person's browser would."""
     import base64
     import hashlib
-    import html as html_mod
-    import re
     import secrets
+
+    import humankit
+
+    key = (client_id, user, scope)
+    now = time.monotonic()
+    hit = _login_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
 
     b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()  # noqa: E731
     verifier = b64(secrets.token_bytes(32))
     challenge = b64(hashlib.sha256(verifier.encode()).digest())
-    redirect_uri = "http://127.0.0.1/cb"
+    redirect_uri = f"http://{humankit.CALLBACK_HOST}:{humankit.CALLBACK_PORT}/cb"
+    auth_url = str(httpx.URL(
+        f"{keycloak}/realms/{REALM}/protocol/openid-connect/auth",
+        params={"client_id": client_id, "response_type": "code",
+                "redirect_uri": redirect_uri, "scope": scope, "state": "smoke",
+                "code_challenge": challenge, "code_challenge_method": "S256"}))
+    final = humankit.auth_code_login(auth_url, redirect_uri, user=user)
+    code = httpx.URL(final).params.get("code")
+    assert code, f"no code on redirect: {final[:150]}"
+    token_data = {
+        "grant_type": "authorization_code", "client_id": client_id,
+        "code": code, "redirect_uri": redirect_uri, "code_verifier": verifier,
+    }
+    if client_secret:
+        token_data["client_secret"] = client_secret
+    token = httpx.post(f"{keycloak}/realms/{REALM}/protocol/openid-connect/token",
+                       data=token_data, timeout=15.0)
+    assert token.status_code == 200, token.text
+    body = token.json()
+    _login_cache[key] = (now + body.get("expires_in", 900) - 120, body)
+    return body
 
-    with httpx.Client(follow_redirects=False, timeout=15.0) as client:
-        auth = client.get(
-            f"{keycloak}/realms/{REALM}/protocol/openid-connect/auth",
-            params={
-                "client_id": client_id,
-                "response_type": "code",
-                "redirect_uri": redirect_uri,
-                "scope": "openid",
-                "state": "smoke",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-            },
-        )
-        assert auth.status_code == 200, auth.text[:500]
-        cookies = dict(
-            sc.split(";", 1)[0].split("=", 1)
-            for sc in auth.headers.get_list("set-cookie")
-        )
-        match = re.search(r'id="kc-form-login"[^>]*action="([^"]+)"', auth.text)
-        assert match, "kc-form-login action not found in Keycloak login page"
-        submit = client.post(
-            html_mod.unescape(match.group(1)),
-            data={"username": DEMO_USER, "password": DEMO_PASSWORD},
-            headers={"Cookie": "; ".join(f"{k}={v}" for k, v in cookies.items())},
-        )
-        assert submit.status_code == 302, f"login failed: {submit.status_code} {submit.text[:300]}"
-        location = submit.headers["location"]
-        assert location.startswith(redirect_uri), location
-        token_data = {
-            "grant_type": "authorization_code",
-            "client_id": client_id,
-            "code": httpx.URL(location).params["code"],
-            "redirect_uri": redirect_uri,
-            "code_verifier": verifier,
-        }
-        if client_secret:
-            token_data["client_secret"] = client_secret
-        token = client.post(
-            f"{keycloak}/realms/{REALM}/protocol/openid-connect/token",
-            data=token_data,
-        )
-        assert token.status_code == 200, token.text
-        return token.json()
+
+def device_bootstrap(client_id: str, client_secret: str, user: str = DEMO_USER,
+                     scope: str = "openid") -> dict:
+    """Headless-agent bootstrap (RFC 8628, M7): the agent initiates the device
+    flow with its OWN client credential and polls; the HUMAN approves the user
+    code in their browser (humankit). No user password ever reaches agent code."""
+    import humankit
+
+    key = ("device:" + client_id, user, scope)
+    now = time.monotonic()
+    hit = _login_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+
+    r = httpx.post(f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/auth/device",
+                   data={"client_id": client_id, "client_secret": client_secret,
+                         "scope": scope}, timeout=15.0)
+    assert r.status_code == 200, f"device init failed: {r.status_code} {r.text[:200]}"
+    dev = r.json()
+    humankit.approve_device(dev["verification_uri_complete"], user=user)
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        t = httpx.post(f"{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/token",
+                       data={"grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                             "device_code": dev["device_code"], "client_id": client_id,
+                             "client_secret": client_secret}, timeout=15.0)
+        if t.status_code == 200:
+            body = t.json()
+            _login_cache[key] = (now + body.get("expires_in", 900) - 120, body)
+            return body
+        err = t.json().get("error", "")
+        assert err in ("authorization_pending", "slow_down"), t.text[:200]
+        time.sleep(dev.get("interval", 5))
+    raise AssertionError("device flow never completed")
 
 
 @pytest.fixture(scope="session")

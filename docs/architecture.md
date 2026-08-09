@@ -147,13 +147,55 @@ agent-identity platform (an "Auth0 for AI agents") would be expected to carry:
 - Production posture: mTLS between services, secret rotation, HA topologies — the
   accepted residuals in the threat model's register.
 
+### Correct-party gaps — the forcing function for v1
+
+Found where the rubber meets the road (an agent driving the live stack completed a CIBA
+approval *itself* with in-repo dev credentials): v0's flows are **architecturally** correct
+about who holds which authority, but **operationally** the human's capacities are filled by
+scripts. Every trusted surface exists yet none carries a real signed-in session — the
+"human" click is always a demo driver with a bearer token in the URL. Per flow, the party
+as intended vs. who actually shows up today:
+
+| Flow | Capacity as intended | Who fills it today | Closure |
+|------|----------------------|--------------------|---------|
+| **A** — delegation | User present at login; explicit "act on your behalf" consent | ✅ Real for interactive MCP clients (browser login; realm DCR policy forces `consentRequired`). ✅ **Closed (M7):** the `act-on-your-behalf` consent scope is a `realm-export.json` fixture (`consentRequired` on `agent-app`, realm-default for scope-less DCR clients); headless bootstrap is the Device Authorization Grant — no agent code holds a user password | ✅ **M7** |
+| **B** — grant linking | User links their provider account (user-present, one time) | ❌ `spike/idp-link` drives alice's login headlessly; no user-facing entry point routes a real person into `kc_action=idp_link` | Console "connect a provider" entry → Keycloak account linking (M8) |
+| **B** — per-agent consent | User approves *this agent may use this grant* on the broker's trusted screen | ✅ **Closed (M7):** `/consent` sits behind a real OIDC session (`broker-ui` client, signed cookie); the owner of every `can_use` write/revoke is the session identity — `?token=` is gone | ✅ **M7** (console aggregation follows in M8) |
+| **C** — CIBA initiation | The ceremony is initiated by a trusted party, never the agent | ✅ **Closed (M7, ADR-0022):** the approval service initiates CIBA at registration with its own client (`login_hint` from *verified* claims); `agent-app` lost the CIBA grant — a real external agent **cannot** touch the ceremony, legitimately or otherwise | ✅ **M7** |
+| **C** — decision | Human gets a push, opens the trusted UI in an authenticated session, decides | ✅ **Closed (M7):** the ntfy deep link (`/approvals#ref`) lands on an OIDC login (`approval-ui` client); the ref survives the round-trip in the signed OAuth `state`; decisions exist only inside that session (no bearer path). Notification onboarding (showing a user their topic) remains for the M8 console | ✅ **M7** (topic onboarding → M8) |
+| **D** — filtered retrieval | Every candidate chunk authorized **as the end user** | ✅ Correct by construction (exchanged token, `batch_check` as `user:{sub}`). ✅ **M7:** tuple sync decoupled from the vector-seed guard — startup reconciliation survives an FGA store reset | ✅ (tuple *source* from real provider ACLs → M12) |
+
+The root cause was singular: **no trusted surface had a session, and dev credentials in
+the repo let any party impersonate any other**. **M7 (`close-correct-party-gaps`) closed
+the party-presence gaps in place:** both trusted surfaces carry real OIDC sessions,
+the approval ceremony is initiated and completed server-side (ADR-0022), headless
+bootstrap is the device flow, and the test suite quarantines its one simulated human in
+`tests/smoke/humankit.py` (a labeled Playwright driver of the real login + surfaces; a
+grep-able invariant test keeps user credentials and ceremony calls out of agent-side
+kits). The agent's role in Flow C is now exactly: receive the 428, wait, retry with the
+action token. What remains for the authority console (M8) is *aggregation and
+onboarding* — one place to see and revoke authority, and a way to hand the user their
+notification topic — not party correctness.
+
 ### Beyond parity — where Prokura earns its keep
 
 Parity makes it credible; these make it worth adopting. v0 proves delegation can be
 *safe*; v1 should make safe delegation something people can **live with, on the tools they
 actually use**. Roughly ranked by leverage — the first three are the proposed v1 spine.
 
-1. **MCP gateway mode — protect tools you didn't write.** Today the guarantees apply only
+1. **The authority console — one surface where a human governs their agents.** The
+   delegation-chain console is operator-facing; the *human's* own experience is scattered
+   across four surfaces (two consents, the approval UI, ntfy). v1's usability centerpiece is
+   a user-facing **"my agents" panel**: every agent acting for me, what each may do, pending
+   approvals, a live activity feed (the already-correlated Loki audit lines), and
+   **one-click revoke** per agent. Power of attorney is only tolerable if you can read the
+   register and tear up the grant — and nothing today aggregates that view for the principal.
+   The trusted approval surface itself is finished as of M7: `/approvals` opens from the
+   notification deep link into a real signed-in session (OIDC login on the page), and
+   decisions exist only there. The console's remaining job is aggregation — the register
+   of agents, grants, and activity — not the approval mechanics.
+
+2. **MCP gateway mode — protect tools you didn't write.** Today the guarantees apply only
    to Prokura's three demo tools. A **proxy that fronts any upstream MCP server** — passing
    through `tools/list`, classifying tools by risk, and transparently wrapping sensitive
    calls in the `428 → approve → consume` ceremony while re-exchanging tokens per upstream
@@ -164,14 +206,6 @@ actually use**. Roughly ranked by leverage — the first three are the proposed 
    OBO/token-exchange/tool-RBAC — so the higher-leverage form of "gateway mode" is not
    reinventing a proxy, but plugging Prokura's approval + brokering + data-layer authorization
    into a data plane's **external-authorization** hook.
-
-2. **The authority console — one surface where a human governs their agents.** The
-   delegation-chain console is operator-facing; the *human's* own experience is scattered
-   across four surfaces (two consents, the approval UI, ntfy). v1's usability centerpiece is
-   a user-facing **"my agents" panel**: every agent acting for me, what each may do, pending
-   approvals, a live activity feed (the already-correlated Loki audit lines), and
-   **one-click revoke** per agent. Power of attorney is only tolerable if you can read the
-   register and tear up the grant — and nothing today aggregates that view for the principal.
 
 3. **Instant revocation & continuous evaluation (the kill switch).** TTL-as-only-revocation
    is the biggest gap for real use. Revoking consent should *immediately* deny in-flight
@@ -210,11 +244,13 @@ queries run continuously as live assertions ("no token ever exceeds 900 s," "no 
 a consumed approval") that alert on violation: security regression tests against production
 telemetry.
 
-**Proposed v1 spine:** gateway (1) + authority console (2) + instant revocation (3) together
+**Proposed v1 spine:** authority console (1) + gateway (2) + instant revocation (3) together
 change the category — from *a reference proving delegation can work* to *the thing you put in
-front of your agents' tools so a human can see, bound, and stop them*. Risk-tiered approval
-(4) is the fast-follow that keeps it livable; taint-aware step-up (5) is the differentiator
-worth writing a paper about.
+front of your agents' tools so a human can see, bound, and stop them*. The console comes
+first because it closes the correct-party gaps above — real sessions on every trusted
+surface, server-initiated CIBA, notification onboarding — without which no workflow can be
+driven with the intended parties present. Risk-tiered approval (4) is the fast-follow that
+keeps it livable; taint-aware step-up (5) is the differentiator worth writing a paper about.
 
 ### Drive it with a real MCP client
 
@@ -253,6 +289,78 @@ deployment needs. Each is meant to be driven end-to-end by hand:
 - **Console trace→log jump** — surface the correlated Loki audit lines from an open span in
   the delegation-chain console; the join (`correlation_id = trace_id`) is proven in the
   telemetry postmortem and the `/api/loki` proxy is already built.
+
+### v1 delivery plan — M7–M12
+
+Same discipline as M0–M6: linear, risk front-loaded, **spike before the heavy build**, one
+OpenSpec change per milestone created *when starting it* (`/opsx:new` — specs are informed
+by what the prior milestone taught), every service born instrumented, every exit criterion
+**verified by looking**. Correct-party closure leads because nothing downstream can be
+demonstrated honestly until the right parties are present.
+
+**M7 — Correct parties.** Close the gap table above. Server-initiated CIBA on the `428`
+(the MCP server runs the ceremony from its verified claims; the agent's role shrinks to
+428 → retry); real OIDC sign-in on the two existing trusted surfaces (`approval.html`,
+`consent.html`); persist the `act-on-your-behalf` consent scope in `realm-export.json`;
+Device Authorization Grant for headless bootstrap (no more user passwords in test code);
+plus the standing hardening debt (SR-01/SR-02, RAG tuple reconciliation). *Spike:* OIDC
+login session on a FastAPI-served page (the pattern both surfaces and later the console
+will reuse). *Deltas to:* `human-approval`, `per-agent-consent`, `identity-delegation`,
+`rag-authorization`, `security-baseline`. **Exit:** the full chain driven end-to-end by a
+real external client (Claude Code) with the human approving in their own authenticated
+browser session — zero in-repo credentials touched by any agent. (Exactly the run that
+failed on 2026-08-08.)
+
+**M8 — Authority console** (thesis 1). The "my agents" panel: per-agent grants and scopes,
+pending-approvals inbox, "connect a provider" entry into `kc_action=idp_link`, notification
+onboarding (show/QR your ntfy topic), live activity feed from the correlated Loki audit
+lines, and per-agent revoke (consent-tuple removal + Keycloak session revocation — the
+parts that exist today; *instant* is M9). M7's surfaces fold into or link from it. *Spike:*
+the aggregation query — one view joining FGA tuples, approval state, and audit lines for
+one principal. *New capability spec:* `authority-console`. **Exit:** a human reads the
+register and tears up a grant, on camera.
+
+**M9 — The kill switch** (thesis 3). Instant revocation and continuous evaluation:
+revocation propagates in seconds (per-hand-out consent check + Keycloak session/offline
+revocation + broker deny-list), every hand-out re-evaluated, CIBA **push mode** riding the
+same callback plumbing, and a **Shared Signals / CAEP** emitter so revocation and risk
+events are consumable signals. *Spike:* measure propagation latency of the three
+revocation paths before designing the deny-list. *New capability spec:* `revocation`.
+**Exit:** "how fast can you make an agent stop?" answered with a measured number in
+seconds, on the dashboard.
+
+**M10 — Gateway mode** (thesis 2). Prokura as the **external-authorization control plane**
+for a data plane: plug approval + brokering + consent decisions into agentgateway's
+ext-authz hook (see Positioning), classifying upstream tools by risk and wrapping
+sensitive calls in the `428 → approve → consume` ceremony — protection for MCP servers
+Prokura didn't write. TypeScript SDK lands here (ADR-0014) where the ecosystem needs it.
+*Spike:* agentgateway ext-authz hook POC — can a deny + challenge round-trip through it.
+*New capability spec:* `gateway-integration`. **Exit:** an unmodified third-party MCP
+server behind the gateway gets the full approval ceremony.
+
+**M11 — Graduated authority** (theses 4 + 6). The policy layer that beats approval
+fatigue: a small Cedar-style engine between tool and approval service (auto-allow /
+approve / hard-deny), **bounded standing approvals** ("this and similar for 1 h, max 5"),
+**metered budgets** on consent (N sends/day, hash-scoped, audited, shown in the console),
+and **organizational routing** (approver ≠ delegator; 4-eyes). Keycloak **RAR** rides
+here for structured approval payloads (ADR-0005). *Spike:* policy-engine sizing — Cedar
+vs. a minimal in-house evaluator. *New capability spec:* `authority-policy`. **Exit:** a
+burst of mixed-risk actions produces exactly one human interruption, and the budget
+depletes visibly.
+
+**M12 — Containment and the real world** (thesis 5 + parity). **Taint-aware step-up** —
+untrusted content (low-trust RAG chunk, fetched page) marks the session tainted and the
+policy point from M11 raises the bar for subsequent side-effectful calls; it lands last
+because it needs both M11's policy engine and *real* untrusted content: **real Google
+Drive ingestion** feeding the FGA tuples and a **GitHub App** action (ADR-0015/0011).
+Plus **invariant monitors** (the postmortem queries as live alerts) and the v1 docs/blog/
+walkthrough refresh. *Spike:* Drive permissions-export → tuple mapping fidelity. *Deltas
+to:* `rag-authorization`, `mcp-authorization`, `human-approval`, `observability`.
+**Exit:** the adversarial LLM-in-the-loop run — a prompt-injected agent on real content,
+contained by the boundary, written up.
+
+Parked past v1 unless a milestone pulls them in: SPIFFE/SPIRE attestation, multi-agent
+`act`-chains, XAA/ID-JAG (ADR-0016), mTLS/rotation/HA production posture.
 
 ## Prior art
 

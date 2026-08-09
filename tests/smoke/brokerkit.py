@@ -1,5 +1,7 @@
-"""Shared helpers for the M2 token-broker smoke tests: obtain a broker-audience
-token, import a grant, and manage OpenFGA operator/consent tuples."""
+"""AGENT-SIDE helpers for the token-broker smoke tests (M7 quarantine, D6):
+obtain a broker-audience token, import a grant, seed operator tuples (test
+scaffolding). Consent writes/revocations are HUMAN capacities — they live in
+humankit and happen on the real consent surface."""
 
 import httpx
 
@@ -9,7 +11,7 @@ from conftest import (
     KEYCLOAK_URL,
     OPENFGA_URL,
     REALM,
-    drive_login,
+    device_bootstrap,
 )
 from prokura import exchange
 
@@ -18,9 +20,11 @@ SECRET = "agent-app-dev-secret"
 
 
 def user_token() -> str:
-    """A prokura user session token for alice (via the confidential agent client,
-    so it is exchangeable). preferred_username=alice."""
-    return drive_login(KEYCLOAK_URL, client_id=AGENT, client_secret=SECRET)["access_token"]
+    """The agent's delegated user token for alice via the device flow (the
+    human approves the user code in her own browser — humankit). Exchangeable;
+    preferred_username=alice."""
+    return device_bootstrap(AGENT, SECRET,
+                            scope="openid tools-audience broker-audience")["access_token"]
 
 
 def broker_token(ut: str | None = None) -> str:
@@ -52,15 +56,3 @@ def fga_write(tuples, delete=False) -> None:
 
 def seed_operator(agent: str, user: str) -> None:
     fga_write([{"user": f"user:{user}", "relation": "operator", "object": f"agent:{agent}"}])
-
-
-def consent(ut: str, agent: str, provider: str = "acme") -> httpx.Response:
-    return httpx.post(f"{BROKER_URL}/consent",
-                      headers={"Authorization": f"Bearer {ut}", "Content-Type": "application/json"},
-                      json={"agent": agent, "provider": provider}, timeout=15.0)
-
-
-def revoke_consent(ut: str, agent: str, provider: str = "acme") -> httpx.Response:
-    return httpx.post(f"{BROKER_URL}/v1/consent/revoke",
-                      headers={"Authorization": f"Bearer {ut}", "Content-Type": "application/json"},
-                      json={"agent": agent, "provider": provider}, timeout=15.0)
