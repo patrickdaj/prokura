@@ -76,7 +76,7 @@ now; findings/content are produced when applied.
 - [x] 6.1 Fresh-clone check: `docker-compose up`, follow the README quickstart verbatim,
   confirm the demo runs and the console trace→logs jump works — **by looking**, not by
   asserting APIs alone.
-- [ ] 6.2 Load the live Pages site (`patrickdaj.github.io/prokura`) in a real browser:
+- [x] 6.2 Load the live Pages site (`patrickdaj.github.io/prokura`) in a real browser:
   landing page renders, nav works, no broken links, blog + architecture reachable —
   verify by looking, not just by checking the deploy status.
 - [x] 6.3 Confirm architecture.md is internally consistent with the final threat model,
