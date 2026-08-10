@@ -16,8 +16,11 @@
   .qcard{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px;}
   .qcard .n{font-family:var(--mono); font-size:10px; color:var(--accent); letter-spacing:.08em;}
   .qcard .q{font-weight:620; color:var(--ink); font-size:15px; margin-top:4px;}
-  .qcard .a{color:var(--muted); font-size:13.5px; margin-top:7px;}
-  .qcard .a b{color:var(--ink); font-weight:600;}
+  .qcard .today{color:var(--muted); font-size:13.5px; margin-top:8px;}
+  .qcard .pro{color:var(--ink); font-size:13.5px; margin-top:4px;}
+  .qcard .today .l, .qcard .pro .l{font-family:var(--mono); font-size:10.5px; letter-spacing:.04em; color:var(--faint);}
+  .qcard .pro .l{color:var(--accent);}
+  .qcard .mech{font-family:var(--mono); font-size:10px; color:var(--faint); letter-spacing:.08em; margin-top:9px;}
 </style>
 
 <div class="rail"><div class="wrap">
@@ -32,25 +35,35 @@
 <div class="wrap">
   <header class="hero">
     <p class="eyebrow">Open-source reference architecture</p>
-    <h1>Agentic identity, assembled</h1>
-    <p class="thesis lede">An AI agent that acts for you needs <i>your</i> authority — and today the only way to grant it is to hand over your passwords and provider tokens. Every agent becomes an <b>unaccountable copy of you</b>. Prokura makes that authority <b>delegated, scoped, human-gated, and revocable</b> instead — so an agent acts on your behalf <b>without ever holding your secrets</b>, and you can always answer <i>who authorized it, what it can do, and whether you can stop it.</i> An OSS answer to "Auth0 for AI Agents," built from <b>Keycloak, OpenFGA, and OpenBao</b> and reachable over <b>MCP</b>.</p>
+    <h1>Your agent shouldn't <i>be</i> you.</h1>
+    <p class="thesis lede">To let an AI agent act for you today, you hand it your password or a long-lived API key. From that moment the agent <b>is</b> you — anything it's tricked into doing, it does as you, with everything you can reach, and no log can tell you apart. Prokura replaces that with authority you <b>grant</b>: scoped to a task, consent-gated per agent, human-approved when it matters, and revocable in one click. Built from <b>Keycloak, OpenFGA, and OpenBao</b>; reachable over <b>MCP</b>; an OSS answer to "Auth0 for AI Agents."</p>
     <div class="meta">
       <span class="chip ok">docker compose up</span>
       <span class="chip">Keycloak · OpenFGA · OpenBao</span>
       <span class="chip">non-production reference</span>
     </div>
+    <div class="screen" style="margin-top:20px"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">tools-api · the approval gate</span></div>
+      <div class="body term"><pre><span class="c"># a prompt-injected agent tries a sensitive act — as it would with your password:</span>
+<span class="p">tools/call</span> <span class="k">send_email</span> <span class="o">{ to: "attacker@…", subject: "forwarding your inbox" }</span>
+
+<span class="c"># with prokura, it doesn't have your password — it has delegated authority:</span>
+<span class="k">HTTP/1.1</span> <span class="b">428 approval_required</span>        <span class="c"># nothing sent. a human sees the real payload</span>
+<span class="g">→</span> you deny on the trusted approval page … <span class="k">the action never executes</span>
+<span class="g">→</span> or hit the kill switch: <span class="k">every token this agent holds is dead in seconds</span></pre></div>
+    </div>
+    <div class="cap"><b>Fail closed, not fail open</b> — this runs live in the demo below.</div>
   </header>
   <hr>
 
   <section>
     <p class="kicker">Why this exists</p>
     <h2>One agent is convenient. Fifty is a governance problem.</h2>
-    <p class="lead">Agents are multiplying — one per person becomes one per task becomes a fleet. Every one of them needs to act as <i>someone</i>. Hand each a copy of your credentials and, at scale, you can't answer the four questions that actually matter:</p>
+    <p class="lead">Agents are multiplying — one per person becomes one per task becomes a fleet. At scale, four questions decide whether that fleet is governable:</p>
     <div class="grid">
-      <div class="qcard"><div class="n">Q1</div><div class="q">Who authorized this agent to act as me?</div><div class="a"><b>Delegation, not shared credentials</b> — a login becomes a scoped, audience-bound token.</div></div>
-      <div class="qcard"><div class="n">Q2</div><div class="q">What exactly can it do — and nothing more?</div><div class="a"><b>Consent-gated, provider-scoped tokens</b> plus fine-grained, per-user authorization.</div></div>
-      <div class="qcard"><div class="n">Q3</div><div class="q">Does a human decide when it matters?</div><div class="a"><b>Reactive CIBA step-up</b> — a single-use, hash-bound approval before the sensitive act.</div></div>
-      <div class="qcard"><div class="n">Q4</div><div class="q">Can I stop it — right now?</div><div class="a"><b>Instant, per-grant revocation</b> with a measured time-to-stop.</div></div>
+      <div class="qcard"><div class="n">Q1</div><div class="q">Who authorized this agent to act as me?</div><div class="today"><span class="l">today →</span> nobody can say — a shared password looks exactly like you.</div><div class="pro"><span class="l">prokura →</span> the agent carries its own token naming both you and it.</div><div class="mech">RFC 8693</div></div>
+      <div class="qcard"><div class="n">Q2</div><div class="q">What exactly can it do — and nothing more?</div><div class="today"><span class="l">today →</span> everything you can do, everywhere, until you rotate the password.</div><div class="pro"><span class="l">prokura →</span> one provider, named scopes, 15-minute tokens, consent per agent.</div><div class="mech">broker + FGA</div></div>
+      <div class="qcard"><div class="n">Q3</div><div class="q">Does a human decide when it matters?</div><div class="today"><span class="l">today →</span> you find out afterwards, if ever.</div><div class="pro"><span class="l">prokura →</span> sensitive actions stop and wait for your approval of the exact payload.</div><div class="mech">CIBA step-up</div></div>
+      <div class="qcard"><div class="n">Q4</div><div class="q">Can I stop it — right now?</div><div class="today"><span class="l">today →</span> rotate your password and break everything else that uses it.</div><div class="pro"><span class="l">prokura →</span> revoke that one delegation; measured time-to-stop in seconds.</div><div class="mech">kill switch</div></div>
     </div>
     <p class="lead" style="margin-top:14px">Prokura assembles the identity plumbing that makes all four answerable — proven end-to-end, running today. It's a <b>reference architecture, not a SaaS</b>: the blueprint you stand up with <code>docker compose up</code>, not a product you point at your org.</p>
   </section>
