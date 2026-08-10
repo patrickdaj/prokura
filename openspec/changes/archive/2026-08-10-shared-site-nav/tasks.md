@@ -38,4 +38,4 @@
       `walkthroughs/` (verification discipline: look, don't assume)
 - [x] 3.4 Verify the no-JavaScript fallback keeps home + GitHub reachable
       (spec: Usable without JavaScript)
-- [ ] 3.5 Commit to main and push
+- [x] 3.5 Commit to main and push
