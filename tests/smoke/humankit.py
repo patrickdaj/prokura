@@ -25,6 +25,7 @@ import threading
 
 APPROVAL_URL = "http://localhost:8120"
 BROKER_URL = "http://localhost:8110"
+AUTHORITY_URL = "http://localhost:8160"
 
 # One real callback listener for every auth-code flow the human completes: a
 # server 302 cannot be intercepted by Playwright routing, so the redirect must
@@ -104,14 +105,27 @@ def _step(page, user: str) -> bool:
     """Advance one human step if a known screen is showing. Returns True if a
     step was taken."""
     if page.locator("#kc-form-login").count():
-        page.fill("#username", user)
-        page.fill("#password", _PASSWORDS[user])
+        # Full login has #username + #password; the prompt=login re-auth page
+        # (used by the M8 idp_link flow when an SSO session already exists) shows
+        # the username read-only and asks only for the password. Fill whatever is
+        # editable and submit.
+        if page.locator("#username").count():
+            page.fill("#username", user)
+        if page.locator("#password").count():
+            page.fill("#password", _PASSWORDS[user])
         page.click("#kc-login")
         page.wait_for_load_state()
         return True
     # Keycloak consent / grant-access screen (also shown for device flow):
     # a submit control named "accept" (button in KC 26, input historically).
     for sel in ("button[name=accept]", "input[name=accept]"):
+        if page.locator(sel).count():
+            page.click(sel)
+            page.wait_for_load_state()
+            return True
+    # KC-26 idp_link confirmation ("Do you want to link ...?") — a submit named
+    # "continue" (M8 account-linking flow from the authority console).
+    for sel in ("button[name=continue]", "input[name=continue]"):
         if page.locator(sel).count():
             page.click(sel)
             page.wait_for_load_state()
@@ -228,5 +242,73 @@ def revoke_consent(agent: str, provider: str, user: str = "alice") -> dict:
                     body: JSON.stringify({agent, provider})});
                 return {status: r.status, body: await r.json()};
             }""", [agent, provider])
+    finally:
+        page.close()
+
+
+# --- M8 authority console -----------------------------------------------------
+
+def _console_loaded(page) -> bool:
+    """True only once the panel is on :8160 with its register RESOLVED. Guards
+    against the transient initial index.html render (before its JS bounces to
+    /login), whose bare '#agents: Loading…' would otherwise look 'done'."""
+    if not page.url.startswith(AUTHORITY_URL):
+        return False
+    txt = page.evaluate(
+        "() => { const a = document.querySelector('#agents'); return a ? a.textContent : null; }")
+    return txt is not None and "Loading" not in txt
+
+
+def open_console(user: str = "alice"):
+    """Real OIDC login on the authority console (:8160); returns a Playwright
+    page sitting on the loaded register panel. Caller closes it."""
+    ctx = _context(user)
+    page = ctx.new_page()
+    page.goto(f"{AUTHORITY_URL}/", wait_until="networkidle")
+    _drive_until(page, user, lambda: _console_loaded(page), max_steps=12)
+    return page
+
+
+def console_session_cookie(user: str = "alice") -> str:
+    """The authority console session cookie, obtained by a real login — for
+    mechanism assertions that then call /api/* the way the panel's JS does."""
+    page = open_console(user)
+    try:
+        for c in page.context.cookies(AUTHORITY_URL):
+            if c["name"] == "prokura_authority_session":
+                return c["value"]
+        raise AssertionError("no authority session cookie after login")
+    finally:
+        page.close()
+
+
+def console_revoke(agent: str, provider: str, user: str = "alice") -> tuple[bool, str]:
+    """Click the per-agent Revoke button on the console panel (real session).
+    Returns (ok, banner_text)."""
+    page = open_console(user)
+    try:
+        sel = f'.revoke[data-agent="{agent}"][data-provider="{provider}"]'
+        page.wait_for_selector(sel, timeout=10_000)
+        page.click(sel)
+        page.wait_for_selector(".banner.ok, .banner.err", timeout=10_000)
+        cls = page.locator(".banner").get_attribute("class") or ""
+        return "ok" in cls, page.locator(".banner").inner_text()
+    finally:
+        page.close()
+
+
+def console_connect(provider: str, user: str = "alice") -> str:
+    """Click 'Connect <provider>' and complete the account-linking ceremony in
+    the browser (prokura login, provider login, KC-26 confirm), landing back on
+    the console. Returns the console's result banner text."""
+    page = open_console(user)
+    try:
+        page.wait_for_selector("button.link", timeout=10_000)
+        page.click(f'button.link:has-text("Connect {provider}")')
+        # Drive the ceremony (prokura re-auth, provider login, KC-26 confirm) until
+        # we are back on the loaded panel — where showLinkResult() has set a banner.
+        _drive_until(page, user, lambda: _console_loaded(page), max_steps=16)
+        page.wait_for_selector(".banner.ok, .banner.err", timeout=10_000)
+        return page.locator(".banner").inner_text()
     finally:
         page.close()

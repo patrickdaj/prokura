@@ -48,3 +48,21 @@ def test_passwords_only_in_humankit():
     src = open(os.path.join(HERE, "humankit.py")).read()
     assert "SIMULATED HUMAN" in src
     assert "_PASSWORDS" in src
+
+
+def test_authority_console_is_a_surface_not_a_ceremony():
+    """M8 (D6): the authority console is a trusted surface that relays the
+    principal's OWN authority by token exchange. Its source must hold no user
+    password and must not run a human ceremony — no CIBA initiation and no
+    approval decision. (It MAY relay a consent revoke: that is the console's job,
+    performed with the user's exchanged bearer, with the broker still the sole
+    writer — so the agent-kit 'consent write' ban does not apply here.)"""
+    svc = os.path.join(HERE, "..", "..", "services", "authority")
+    sources = "\n".join(
+        open(os.path.join(svc, f)).read()
+        for f in os.listdir(svc) if f.endswith((".py", ".html")))
+    assert not re.search(r"DEMO_PASSWORD|[\"']alice[\"']\s*,\s*[\"']alice[\"']", sources), \
+        "authority console source holds a user password"
+    assert "ext/ciba/auth" not in sources, "authority console initiates CIBA"
+    assert "grant-type:ciba" not in sources, "authority console polls the CIBA grant"
+    assert "/decide" not in sources, "authority console relays an approval decision"

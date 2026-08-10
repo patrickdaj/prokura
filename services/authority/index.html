@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Prokura — Your authority</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#0b0d10; color:#e7ebf0;
+    background-image:radial-gradient(1200px 700px at 50% -20%, #14181d 0%, #0b0d10 55%); }
+  a { color:#7aa2ff; text-decoration:none; } a:hover { text-decoration:underline; }
+  .wrap { width:min(94vw,860px); margin:0 auto; padding:34px 0 60px; }
+  header { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+  .wordmark { letter-spacing:.5em; font-weight:600; font-size:14px; color:#cfd6de; margin:0; }
+  .who { font-size:12.5px; color:#8a97a4; } .who b { color:#e7ebf0; font-weight:600; }
+  h1 { font-size:22px; font-weight:600; margin:2px 0 4px; }
+  .lede { color:#93a0ad; font-size:13.5px; margin:0 0 26px; line-height:1.55; max-width:66ch; }
+  .banner { display:none; border-radius:9px; padding:11px 14px; font-size:13px; margin-bottom:20px; }
+  .banner.ok { display:block; background:#0f2417; border:1px solid #1e5537; color:#7ee0a6; }
+  .banner.err { display:block; background:#2a1416; border:1px solid #5a2a2f; color:#f7a3ab; }
+  section { background:#12161b; border:1px solid #232a31; border-radius:14px;
+    padding:20px 22px; margin-bottom:16px; box-shadow:0 24px 60px -40px rgba(0,0,0,.8); }
+  section > h2 { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#8a97a4;
+    margin:0 0 14px; font-weight:600; }
+  .empty { color:#6b7987; font-size:13px; font-style:italic; }
+  .agent { border-top:1px solid #1d232a; padding:14px 0 4px; }
+  .agent:first-of-type { border-top:0; padding-top:2px; }
+  .agent .name { font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  .pill { font-size:10.5px; font-family:ui-monospace,monospace; color:#9fb0c0;
+    border:1px solid #2b343d; border-radius:20px; padding:1px 9px; }
+  .grant { display:flex; align-items:center; justify-content:space-between; gap:12px;
+    margin-top:10px; padding:9px 11px; background:#0e1216; border:1px solid #1d232a; border-radius:9px; }
+  .grant .g { font-size:13px; } .grant .g .p { font-weight:600; }
+  .grant .scopes { color:#8a97a4; font-size:11.5px; font-family:ui-monospace,monospace; margin-top:2px; }
+  button { border:0; border-radius:8px; padding:7px 13px; font-size:12.5px; font-weight:600; cursor:pointer; }
+  .revoke { background:transparent; color:#f0a3ab; border:1px solid #4a2a2f; }
+  .revoke:hover { background:#2a1416; } .revoke:disabled { opacity:.5; cursor:default; }
+  .link { background:#3d7bfd; color:#fff; } .link:hover { background:#5a8dfd; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px;
+    border-top:1px solid #1d232a; padding:11px 0; font-size:13.5px; }
+  .row:first-child { border-top:0; }
+  .status { font-size:11px; font-family:ui-monospace,monospace; padding:1px 8px; border-radius:20px; border:1px solid #2b343d; color:#9fb0c0; }
+  .status.pending, .status.delegated { color:#f2b24d; border-color:#4a3c1e; background:#211c10; }
+  .status.approved { color:#4ade80; border-color:#1e5537; background:#0f2417; }
+  .status.denied, .status.expired { color:#f0a3ab; border-color:#4a2a2f; }
+  .providers { display:flex; flex-wrap:wrap; gap:10px; }
+  .topic { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+  .topic .qr { background:#fff; padding:8px; border-radius:10px; width:132px; height:132px; flex:none; }
+  .topic .qr svg { width:100%; height:100%; display:block; }
+  .topic .meta { flex:1; min-width:220px; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px;
+    color:#b8c6d4; word-break:break-all; background:#0e1216; border:1px solid #1d232a;
+    border-radius:7px; padding:8px 10px; margin:6px 0 10px; }
+  .copy { background:transparent; color:#9fb0c0; border:1px solid #2b343d; }
+  .copy:hover { border-color:#3a4650; }
+  .feed { max-height:280px; overflow:auto; }
+  .ev { display:grid; grid-template-columns:auto 1fr; gap:12px; padding:7px 0; border-top:1px solid #161c22;
+    font-family:ui-monospace,monospace; font-size:11.5px; color:#b8c6d4; }
+  .ev:first-child { border-top:0; } .ev .t { color:#6b7987; white-space:nowrap; }
+  .ev .svc { color:#7aa2ff; } .ev .msg { color:#aebcca; word-break:break-word; }
+  .note { color:#6b7987; font-size:11.5px; line-height:1.5; margin-top:12px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <p class="wordmark">PROKURA</p>
+      <span class="who" id="who"></span>
+    </header>
+    <h1>Your authority</h1>
+    <p class="lede">Every agent acting for you, the grants they can use, your pending approvals, and
+      your activity — one signed-in view. Revoke a delegation or connect a provider from here;
+      approvals are decided on the approval screen, this page links to it.</p>
+
+    <div class="banner" id="banner"></div>
+
+    <section>
+      <h2>My agents</h2>
+      <div id="agents"><p class="empty">Loading…</p></div>
+    </section>
+
+    <section>
+      <h2>Pending &amp; recent approvals</h2>
+      <div id="approvals"><p class="empty">Loading…</p></div>
+    </section>
+
+    <section>
+      <h2>Connect a provider</h2>
+      <p class="note" style="margin-top:0;margin-bottom:14px">Link a provider account to yourself. You’ll
+        sign in with the provider in your own browser; the grant then appears above — no admin involved.</p>
+      <div class="providers" id="providers"></div>
+    </section>
+
+    <section>
+      <h2>Notifications</h2>
+      <div class="topic">
+        <div class="qr" id="qr"></div>
+        <div class="meta">
+          <p class="note" style="margin-top:0">Approval requests are pushed to your private topic. Subscribe in the
+            ntfy app or web to get notified. The topic is notify-only — knowing it grants nothing.</p>
+          <div class="mono" id="topic">—</div>
+          <button class="copy" id="copyTopic">Copy subscribe link</button>
+          <a class="link" style="display:inline-block;margin-left:8px;padding:7px 13px;border-radius:8px" id="subLink" href="#" target="_blank" rel="noopener">Open ntfy</a>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Activity</h2>
+      <div class="feed" id="activity"><p class="empty">Loading…</p></div>
+    </section>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[<>&"]/g, (c) => (
+    {"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+  const KNOWN_PROVIDERS = ["acme"];   // wired in this deployment
+  let SUB_URL = "";
+
+  function banner(kind, msg) {
+    const b = $("banner"); b.className = "banner " + kind; b.textContent = msg;
+  }
+  function toLogin() { location.href = "/login"; }
+
+  function showLinkResult() {
+    const q = new URLSearchParams(location.search);
+    if (q.get("link") === "ok") banner("ok", "Connected " + esc(q.get("provider") || "provider") + " — the grant is in your register below.");
+    else if (q.get("link") === "import_failed") banner("err", "Linking finished but importing the grant failed. Check the logs.");
+    else if (q.get("link") === "cancelled") banner("err", "Provider linking was cancelled.");
+    else if (q.get("link") === "error") banner("err", "Provider linking could not start.");
+    if (q.has("link")) history.replaceState({}, "", "/");
+  }
+
+  async function loadRegister() {
+    const r = await fetch("/api/register");
+    if (r.status === 401) return toLogin();
+    if (!r.ok) { $("agents").innerHTML = '<p class="empty">Could not load your register.</p>'; return; }
+    const reg = await r.json();
+    $("who").innerHTML = "Signed in as <b>" + esc(reg.user) + "</b>";
+
+    // Agents
+    const A = $("agents");
+    if (!reg.agents.length) A.innerHTML = '<p class="empty">No agents act for you yet.</p>';
+    else A.innerHTML = reg.agents.map((a) => {
+      const grants = a.consents.length ? a.consents.map((g) => `
+        <div class="grant">
+          <div class="g"><span class="p">${esc(g.provider)}</span>
+            <div class="scopes">${esc(g.scopes || "—")}</div></div>
+          <button class="revoke" data-agent="${esc(a.agent)}" data-provider="${esc(g.provider)}">Revoke</button>
+        </div>`).join("")
+        : '<p class="empty" style="margin:8px 0 0">No grants consented to this agent.</p>';
+      return `<div class="agent"><div class="name">${esc(a.agent)}
+        <span class="pill">operator: you</span></div>${grants}</div>`;
+    }).join("");
+    A.querySelectorAll(".revoke").forEach((btn) => btn.onclick = () => revoke(btn));
+
+    // Approvals
+    const P = $("approvals");
+    if (!reg.approvals.length) P.innerHTML = '<p class="empty">No approvals.</p>';
+    else P.innerHTML = reg.approvals.map((ap) => {
+      const st = esc(ap.status);
+      const decidable = ap.status === "pending" || ap.status === "delegated";
+      const link = reg.approval_base + "/approvals#" + encodeURIComponent(ap.ref);
+      return `<div class="row"><div>
+          <div><b>${esc(ap.agent)}</b> · ${esc(ap.action)}</div>
+          <div class="scopes" style="font-family:ui-monospace,monospace;font-size:11px;color:#6b7987">${esc(ap.ref)}</div>
+        </div><div style="display:flex;gap:12px;align-items:center">
+          <span class="status ${st}">${st}</span>
+          ${decidable ? `<a href="${link}" target="_blank" rel="noopener">Review →</a>` : ""}
+        </div></div>`;
+    }).join("");
+
+    // Providers to connect (hide ones already linked)
+    const linked = new Set((reg.grants || []).map((g) => g.provider));
+    const PR = $("providers");
+    const opts = KNOWN_PROVIDERS.filter((p) => !linked.has(p));
+    PR.innerHTML = (opts.length ? opts : []).map((p) =>
+      `<button class="link" onclick="location.href='/api/link/${encodeURIComponent(p)}'">Connect ${esc(p)}</button>`).join("")
+      + (reg.grants && reg.grants.length
+          ? `<p class="note" style="width:100%">Linked: ${reg.grants.map((g)=>esc(g.provider)).join(", ")}</p>` : "")
+      + (!opts.length && !(reg.grants||[]).length ? '<p class="empty">No providers wired in this deployment.</p>' : "");
+  }
+
+  async function revoke(btn) {
+    btn.disabled = true; btn.textContent = "Revoking…";
+    const r = await fetch(`/api/revoke/${encodeURIComponent(btn.dataset.agent)}/${encodeURIComponent(btn.dataset.provider)}`,
+      { method: "POST" });
+    if (r.ok) { banner("ok", `Revoked ${btn.dataset.agent}'s access to ${btn.dataset.provider}. Effect applies on its next token request.`);
+      loadRegister(); }
+    else { banner("err", "Revoke failed (HTTP " + r.status + ")."); btn.disabled = false; btn.textContent = "Revoke"; }
+  }
+
+  async function loadTopic() {
+    const r = await fetch("/api/topic");
+    if (!r.ok) { $("topic").textContent = "unavailable"; return; }
+    const t = await r.json();
+    SUB_URL = t.subscribe_url || "";
+    $("topic").textContent = SUB_URL;
+    $("subLink").href = SUB_URL;
+    if (t.qr_svg) $("qr").innerHTML = t.qr_svg;
+  }
+
+  async function loadActivity() {
+    const r = await fetch("/api/activity");
+    const F = $("activity");
+    if (!r.ok) { F.innerHTML = '<p class="empty">Could not load activity.</p>'; return; }
+    const evs = (await r.json()).activity || [];
+    if (!evs.length) { F.innerHTML = '<p class="empty">No recent activity.</p>'; return; }
+    F.innerHTML = evs.map((e) => {
+      const when = new Date(e.ts * 1000).toLocaleTimeString();
+      return `<div class="ev"><span class="t">${esc(when)}</span>
+        <span class="msg"><span class="svc">${esc(e.service)}</span> ${esc(e.line)}</span></div>`;
+    }).join("");
+  }
+
+  $("copyTopic").onclick = async () => {
+    try { await navigator.clipboard.writeText(SUB_URL); $("copyTopic").textContent = "Copied ✓";
+      setTimeout(() => $("copyTopic").textContent = "Copy subscribe link", 1500); }
+    catch (e) { /* clipboard blocked; the link is visible above */ }
+  };
+
+  async function boot() {
+    const who = await fetch("/whoami");
+    if (who.status === 401) return toLogin();
+    showLinkResult();
+    loadRegister(); loadTopic(); loadActivity();
+  }
+  boot();
+</script>
+</body>
+</html>

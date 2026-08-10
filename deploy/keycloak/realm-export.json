@@ -70,7 +70,12 @@
       ],
       "realmRoles": [
         "default-roles-prokura"
-      ]
+      ],
+      "clientRoles": {
+        "broker": [
+          "read-token"
+        ]
+      }
     }
   ],
   "clientScopes": [
@@ -147,6 +152,26 @@
           "protocolMapper": "oidc-audience-mapper",
           "config": {
             "included.client.audience": "token-broker",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "approval-audience",
+      "description": "M8: audience mapper adding aud=approval, so the authority console can exchange (RFC 8693) the signed-in user's token for the approval service's user-bound read APIs (/v1/my/approvals, /v1/my/topic). Optional on authority-console.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "approval-service-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "approval",
             "access.token.claim": "true"
           }
         }
@@ -525,6 +550,20 @@
       }
     },
     {
+      "clientId": "approval",
+      "name": "Approval service (M8: audience / resource)",
+      "description": "aud target for approval-audience: the approval service validates aud=approval on the console's user-bound read APIs (/v1/my/approvals, /v1/my/topic). authority-console exchanges the signed-in user's token for this audience.",
+      "publicClient": false,
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "approval-audience-dev-secret"
+    },
+    {
       "clientId": "approval-service",
       "name": "Approval service CIBA initiator (M7)",
       "description": "M7: the ONLY CIBA-grant client. The approval service initiates the ceremony at /register and polls after the decision; the token is discarded (ADR-0022). Delegation POSTs carry a realm-signed JWT with azp=approval-service (SR-02 auth).",
@@ -614,6 +653,66 @@
       "serviceAccountsEnabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "rag-server-dev-secret",
+      "attributes": {
+        "standard.token.exchange.enabled": "true"
+      }
+    },
+    {
+      "clientId": "authority-ui",
+      "name": "Authority console session (M8)",
+      "description": "M8 confidential login client for the authority console (PKCE, exact redirect). Token carries aud=authority-console so the backend can exchange it (RFC 8693); also initiates kc_action=idp_link in the user's session.",
+      "publicClient": false,
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "authority-ui-dev-secret",
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8160/callback",
+        "http://localhost:8160/api/link/callback"
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "profile"
+      ],
+      "protocolMappers": [
+        {
+          "name": "authority-console-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "authority-console",
+            "access.token.claim": "true"
+          }
+        }
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "authority-console",
+      "name": "Authority console backend (M8: exchange client)",
+      "description": "M8 backend exchange client. Exchanges (RFC 8693) the signed-in user's authority-ui token into aud=token-broker and aud=approval. Never browser-facing; exchanged tokens stay user-bound (subject preserved) so downstream sees owner = verified subject.",
+      "publicClient": false,
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "authority-console-dev-secret",
+      "defaultClientScopes": [
+        "basic",
+        "profile"
+      ],
+      "optionalClientScopes": [
+        "broker-audience",
+        "approval-audience"
+      ],
       "attributes": {
         "standard.token.exchange.enabled": "true"
       }

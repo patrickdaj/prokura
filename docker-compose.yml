@@ -169,6 +169,41 @@ services:
     depends_on:
       - lgtm
 
+  # M8: Authority Console — the principal's aggregated authority register. A
+  # trusted *surface* with its own OIDC session (authority-ui) that relays the
+  # signed-in user's own authority downstream by RFC 8693 exchange (authority-
+  # console). It reads FGA/broker/approval and Loki, and drives consent revoke
+  # and provider linking — never a tuple-writer. Fire-and-forget telemetry.
+  authority:
+    build: ./services/authority
+    ports:
+      - "8160:8160"
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/prokura
+      PROKURA_REALM: prokura
+      AUTHORITY_PUBLIC_URL: http://localhost:8160
+      UI_CLIENT_ID: authority-ui
+      UI_CLIENT_SECRET: ${AUTHORITY_UI_CLIENT_SECRET:-authority-ui-dev-secret}
+      EXCHANGE_CLIENT_ID: authority-console
+      EXCHANGE_CLIENT_SECRET: ${AUTHORITY_CONSOLE_CLIENT_SECRET:-authority-console-dev-secret}
+      SESSION_SECRET: ${AUTHORITY_SESSION_SECRET:-authority-session-dev-secret}
+      BROKER_URL: http://token-broker:8110
+      BROKER_AUDIENCE: token-broker
+      APPROVAL_URL: http://approval:8120
+      APPROVAL_AUDIENCE: approval
+      APPROVAL_PUBLIC_URL: http://localhost:8120
+      GRAFANA_URL: http://lgtm:3000
+      OPENFGA_URL: http://openfga:8080
+      FGA_STORE_NAME: prokura
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
+      OTEL_SERVICE_NAME: authority
+    depends_on:
+      keycloak:
+        condition: service_started
+      openfga:
+        condition: service_started
+
   # M2: Token Broker — provider-token lifecycle (leases, scope-down, per-agent
   # consent, audit). First instrumented Python service; OTLP is fire-and-forget
   # so there is intentionally NO depends_on: lgtm.
@@ -217,9 +252,11 @@ services:
       PROKURA_REALM: prokura
       DATABASE_URL: postgresql://${POSTGRES_USER:-prokura}:${POSTGRES_PASSWORD:-prokura-dev}@postgres:5432/${POSTGRES_DB:-prokura}
       NTFY_URL: http://ntfy
+      NTFY_PUBLIC_URL: http://localhost:8090
       NTFY_USER: prokura-approval
       NTFY_APPROVAL_PASSWORD: ${NTFY_APPROVAL_PASSWORD:-prokura-approval-dev}
       APPROVAL_PUBLIC_URL: http://localhost:8120
+      APPROVAL_AUDIENCE: approval
       # M7: surface session (approval-ui client) + server-initiated CIBA
       # (approval-service is the realm's only CIBA-grant client, ADR-0019).
       UI_CLIENT_ID: approval-ui

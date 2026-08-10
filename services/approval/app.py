@@ -20,6 +20,8 @@ Endpoints:
   GET  /my/approvals             session user's approvals
   POST /approval/{ref}/decide    approve/deny in the session -> relay + complete ceremony
   POST /consume                  the gated tool verifies hash + single-use here
+  GET  /v1/my/approvals          M8: user-bound bearer (aud=approval) read for the console
+  GET  /v1/my/topic              M8: user-bound bearer (aud=approval) -> the subject's ntfy topic
 """
 
 import hashlib
@@ -234,6 +236,47 @@ def approval_payload(ref: str, request: Request) -> JSONResponse:
 def my_approvals(request: Request) -> JSONResponse:
     sess = _session(request)
     return JSONResponse(db.list_for_user(sess["preferred_username"]))
+
+
+# --- M8: user-bound read APIs for the authority console -----------------------
+# Authenticated by an exchanged user-bound bearer (aud=approval); the subject is
+# taken from the verified token only. Read-only: no decision path exists here
+# (decide/{ref} is session-only above). These never expose another user's data.
+
+def _user_bearer(authorization: str | None) -> dict:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise _Http(401, "missing_token")
+    token = authorization.split(" ", 1)[1]
+    try:
+        return validation.verify_bearer(token)
+    except validation.WrongAudience as e:
+        audit.emit("read_refused", detail=f"audience: {e}")
+        raise _Http(403, "wrong_audience")
+    except validation.TokenInvalid as e:
+        audit.emit("read_refused", detail=str(e))
+        raise _Http(401, "invalid_token")
+
+
+@app.get("/v1/my/approvals")
+def v1_my_approvals(authorization: str | None = Header(default=None)) -> JSONResponse:
+    claims = _user_bearer(authorization)
+    user = claims.get("preferred_username")
+    return JSONResponse({"user": user, "approvals": db.list_for_user(user)})
+
+
+@app.get("/v1/my/topic")
+def v1_my_topic(authorization: str | None = Header(default=None)) -> JSONResponse:
+    # The topic salt never leaves this service (ADR-0007); the console only ever
+    # sees the derived topic for its own signed-in user. Derivation runs only
+    # after the bearer verifies (wrong-audience/invalid refused above).
+    claims = _user_bearer(authorization)
+    user = claims.get("preferred_username")
+    topic = ntfy.topic_for(user)
+    return JSONResponse({
+        "user": user,
+        "topic": topic,
+        "subscribe_url": f"{config.NTFY_PUBLIC_URL}/{topic}",
+    })
 
 
 @app.post("/approval/{ref}/decide")

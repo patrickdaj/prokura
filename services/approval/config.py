@@ -8,11 +8,18 @@ KEYCLOAK_ISSUER = os.environ.get(
 )
 REALM = os.environ.get("PROKURA_REALM", "prokura")
 
+# M8: the authority console reaches the user-bound read APIs (/v1/my/approvals,
+# /v1/my/topic) with a token it exchanged (RFC 8693) into this audience. The read
+# APIs verify aud=approval; the CIBA/session ceremony paths are unaffected.
+APPROVAL_AUDIENCE = os.environ.get("APPROVAL_AUDIENCE", "approval")
+
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://prokura:prokura-dev@postgres:5432/prokura"
 )
 
 NTFY_URL = os.environ.get("NTFY_URL", "http://ntfy")
+# Browser-facing ntfy base (host port), for the console's subscribe link/QR (M8).
+NTFY_PUBLIC_URL = os.environ.get("NTFY_PUBLIC_URL", "http://localhost:8090")
 # The approval service is the only principal allowed to publish (deny-all server).
 NTFY_USER = os.environ.get("NTFY_USER", "prokura-approval")
 NTFY_PASSWORD = os.environ.get("NTFY_APPROVAL_PASSWORD", "prokura-approval-dev")

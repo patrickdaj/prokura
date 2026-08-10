@@ -51,6 +51,16 @@ def record_grant(user_id: str, provider: str, scopes: str) -> None:
         )
 
 
+def list_grants(user_id: str) -> list[dict]:
+    """All of a user's grants (provider + granted scopes) — M8 console read."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT provider, granted_scopes FROM broker_grants WHERE user_id=%s "
+            "ORDER BY provider", (user_id,),
+        ).fetchall()
+    return [{"provider": r[0], "granted_scopes": r[1]} for r in rows]
+
+
 def get_grant(user_id: str, provider: str) -> dict | None:
     with connect() as conn:
         row = conn.execute(

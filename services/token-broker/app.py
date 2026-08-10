@@ -8,7 +8,8 @@ Endpoints:
   POST /v1/grants/{provider}/revoke   revoke a grant (provider + OpenBao + tuples)
   GET  /consent                       per-agent consent screen (authenticated)
   POST /consent                       write the can_use tuple (sole writer)
-  POST /v1/consent/revoke             revoke one agent's consent
+  GET  /v1/consents                   M8: list the console user's consents (user-bound bearer)
+  POST /v1/consent/revoke             revoke one agent's consent (session OR user-bound bearer)
 
 Born instrumented: traceparent join key + prokura.correlation_id, realtime audit.
 """
@@ -240,12 +241,67 @@ async def write_consent(request: Request) -> JSONResponse:
 
 
 @app.post("/v1/consent/revoke")
-async def revoke_consent(request: Request) -> JSONResponse:
-    sess = _session(request)
-    user = sess["preferred_username"]
+async def revoke_consent(request: Request,
+                         authorization: str | None = Header(default=None)) -> JSONResponse:
+    # Two owner-authenticated paths converge here (M8, D3): the consent surface's
+    # own session (M7) OR an exchanged user-bound bearer from the authority
+    # console (aud=token-broker). Either way the OWNER is a verified identity and
+    # revoke only ever deletes a tuple under grant:{owner}/*, so a foreign subject
+    # cannot revoke another user's consent. azp is audited.
+    user, azp = _owner_from_session_or_bearer(request, authorization)
     body = await request.json()
     agent = body.get("agent")
     provider = body.get("provider")
     consent.revoke_consent(agent, user, provider)
-    audit.emit(decision="consent_revoked", user=user, agent=agent, provider=provider)
+    audit.emit(decision="consent_revoked", user=user, agent=agent, provider=provider,
+               detail=f"azp={azp}")
     return JSONResponse({"revoked": True, "agent": agent, "provider": provider})
+
+
+@app.get("/v1/consents")
+def list_consents(authorization: str | None = Header(default=None)) -> JSONResponse:
+    # M8: the console lists the signed-in user's per-agent consents. User-bound
+    # bearer only (aud=token-broker); the subject is the verified token subject,
+    # so no principal can read another's register.
+    token = _bearer(authorization)
+    try:
+        claims = validation.verify_bearer(token)
+    except validation.TokenInvalid as e:
+        audit.emit(decision="denied_invalid_token", detail=str(e))
+        raise _Http(401, "invalid_token")
+    except validation.WrongAudience as e:
+        audit.emit(decision="denied_audience", detail=str(e))
+        raise _Http(403, "wrong_audience")
+    user = claims.get("preferred_username")
+    grants = db.list_grants(user)
+    consents = []
+    for g in grants:
+        for agent in fga.list_can_use_agents(user, g["provider"]):
+            consents.append({"agent": agent, "provider": g["provider"],
+                             "scopes": g["granted_scopes"]})
+    # grants (providers linked, with scopes) so the console can show what is
+    # connected even before any agent is consented; consents is the per-agent view.
+    return JSONResponse({"user": user, "consents": consents,
+                         "grants": [{"provider": g["provider"], "scopes": g["granted_scopes"]}
+                                    for g in grants]})
+
+
+def _owner_from_session_or_bearer(
+        request: Request, authorization: str | None) -> tuple[str, str]:
+    """Resolve the acting owner and azp. Prefer the surface session (M7 consent
+    screen, azp=broker-ui); fall back to a user-bound bearer (M8 console,
+    aud=token-broker). Raises 401 if neither authenticates."""
+    sess = ws.session_from(request.cookies.get(config.SESSION_COOKIE))
+    if sess:
+        return sess["preferred_username"], config.UI_CLIENT_ID
+    if authorization:
+        try:
+            claims = validation.verify_bearer(_bearer(authorization))
+        except validation.TokenInvalid as e:
+            audit.emit(decision="denied_invalid_token", detail=str(e))
+            raise _Http(401, "invalid_token")
+        except validation.WrongAudience as e:
+            audit.emit(decision="denied_audience", detail=str(e))
+            raise _Http(403, "wrong_audience")
+        return claims.get("preferred_username"), claims.get("azp")
+    raise _Http(401, "session_required")

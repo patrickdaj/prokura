@@ -142,11 +142,43 @@ approval), console service last. Nothing existing breaks: all M7 paths remain; t
 only contract addition is new endpoints and one alternative (bearer) authentication
 on consent revoke. Rollback = git revert + clean compose up.
 
-## Open Questions
+## Spike findings (`spike/authority-agg/agg_spike.py`, run against the live stack)
 
-- Does `kc_action=idp_link` require the `manage-account` client role on the *user*
-  or an explicit client scope for `authority-ui`? (Spike resolves; M2 finding covers
-  the account-client path only.)
+- **Exchange chain (D2) confirmed.** The `authority-ui` login token must name
+  `authority-console` in its `aud` for the backend client to exchange it (same
+  rule MCP relies on: the subject token must carry the requesting client in its
+  audience). Realized with an `oidc-audience-mapper` protocol mapper on
+  `authority-ui` adding `aud=authority-console`. `authority-console`
+  (`standard.token.exchange.enabled=true`, optional scopes `broker-audience` +
+  `approval-audience`) then exchanges into `aud=token-broker` and `aud=approval`
+  with **`sub` and `preferred_username` preserved** (`azp=authority-console`).
+  The broker's existing audience gate accepts the exchanged bearer (it reached
+  the consent check, `403 not_consented`, past `verify_bearer`).
+- **`approval` must be a registered client.** Keycloak's token-exchange
+  `audience` parameter resolves against real clients, so `aud=approval` required
+  a new `approval` resource client (mirrors `token-broker`/`rag-server` as
+  audience targets). The approval service validates `aud=approval` on its new
+  read APIs (task 3.3). Kept distinct from `approval-service` (CIBA initiator)
+  and `approval-ui` (session), matching the `token-broker`/`broker-ui` split.
+- **`idp_link` is legal from a confidential non-`account` client.** Driving
+  `kc_action=idp_link:acme` on `authority-ui` (`prompt=login` + the KC-26
+  `name="continue"` confirm hop) returned `kc_action_status=success` with **no
+  `manage-account` role or extra client scope** — resolves the open question
+  below and simplifies task 2.3 (nothing extra to grant).
+- **Aggregation shape.** OpenFGA `/read` with an empty `tuple_key` enumerates all
+  tuples; filter `operator` (agents the principal operates) and `can_use` (grants
+  consented on the principal's `grant:{user}/…` objects) in the backend. Approval
+  rows come from the user-bound `/v1/my/approvals` read (task 3.1). Activity is
+  Loki `|= "user=<username>"` over `{service_name=~"token-broker|approval|mcp|rag"}`
+  through Grafana's datasource proxy — a plain substring gate on the audit line's
+  `user=<principal>` field, so the filter MUST be composed server-side from the
+  session username (never client input).
+
+## Open Questions (resolved by the spike)
+
+- ~~Does `kc_action=idp_link` require the `manage-account` client role or an
+  explicit client scope for `authority-ui`?~~ **No** — it works from the plain
+  confidential client (spike 1.2).
 - Should the activity feed show tool *outcomes* (sent/denied/consumed) only, or also
   reads (rag_retrieved)? Default: everything carrying `user=<principal>` in the
   audit streams, newest first — it is their register.

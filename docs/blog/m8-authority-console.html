@@ -1,0 +1,176 @@
+<meta charset="utf-8">
+<title>Prokura — M8: Authority Console</title>
+<style>
+  :root{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+      --ink:#10151c; --muted:#566372; --faint:#8794a2;
+      --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0a0c0f; --panel:#111519; --panel2:#161b21; --border:#232b33; --hair:#1b222a;
+    --ink:#e8ecf1; --muted:#9aa7b4; --faint:#66727f;
+    --accent:#4d84ff; --accent-soft:#1b2740; --ok:#46d07f; --learn:#f2b24d; --bad:#f2726b;
+  }
+  :root[data-theme="light"]{
+    --ground:#f5f7fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#e2e7ee; --hair:#edf0f4;
+    --ink:#10151c; --muted:#566372; --faint:#8794a2;
+    --accent:#2f63e6; --accent-soft:#e6edff; --ok:#17935a; --learn:#b7791f; --bad:#d64a44;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16.5px; line-height:1.62;
+    background-image:radial-gradient(1100px 520px at 78% -8%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 62%);
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px;}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+
+  .rail{border-bottom:1px solid var(--hair); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter:blur(8px);}
+  .rail .wrap{display:flex; align-items:center; justify-content:space-between; height:56px;}
+  .mark{font-family:var(--sans); font-weight:600; letter-spacing:.42em; font-size:13px; color:var(--ink);}
+  .steps{display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;}
+  .steps span{color:var(--faint);}
+  .steps .cur{color:var(--accent);}
+  .steps .done{color:var(--muted);}
+  .steps i{color:var(--faint); font-style:normal;}
+
+  .hero{padding:70px 0 34px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--accent); margin:0 0 18px;}
+  h1{font-size:clamp(34px,6vw,52px); line-height:1.04; letter-spacing:-.02em; font-weight:640; margin:0 0 20px; text-wrap:balance;}
+  .thesis{font-size:20px; line-height:1.5; color:var(--muted); margin:0; max-width:64ch; text-wrap:pretty;}
+  .thesis b{color:var(--ink); font-weight:600;}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px; font-family:var(--mono); font-size:12px;}
+  .chip{border:1px solid var(--border); border-radius:999px; padding:4px 11px; color:var(--muted); letter-spacing:.03em;}
+  .chip.status{border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); color:var(--ok);}
+  .chip.status::before{content:"●"; margin-right:6px; font-size:9px; vertical-align:1px;}
+
+  section{padding:34px 0;}
+  .kicker{font-family:var(--mono); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin:0 0 6px;}
+  h2{font-size:26px; letter-spacing:-.01em; font-weight:620; margin:0 0 16px; text-wrap:balance;}
+  h3{font-size:16px; margin:0 0 6px; font-weight:620;}
+  p{margin:0 0 15px;}
+  .lead{color:var(--muted);}
+  hr{border:0; border-top:1px solid var(--hair); margin:0;}
+
+  .nums{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .nums div{background:var(--panel); padding:18px 16px;}
+  .nums .n{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums; color:var(--ink);}
+  .nums .l{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.35;}
+  @media(max-width:620px){ .nums{grid-template-columns:repeat(2,1fr);} }
+
+  /* attack cards */
+  .atk{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .atk .row{background:var(--panel); padding:20px 20px;}
+  .atk .tgt{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--bad); margin-bottom:8px; display:inline-block;}
+  .atk h3{font-size:16px; margin-bottom:8px;}
+  .atk .path{font-size:14.5px; color:var(--muted); margin:0 0 10px;}
+  .atk .brk{font-size:14.5px; color:var(--ink); margin:0; padding:10px 12px; background:var(--panel2); border-left:3px solid var(--ok); border-radius:8px;}
+  .atk .brk b{color:var(--ok);}
+  .atk code, code.k{font-family:var(--mono); font-size:.86em; background:var(--panel2); border:1px solid var(--hair); border-radius:5px; padding:1px 5px; color:var(--ink);}
+
+  .reg{display:flex; flex-direction:column; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .reg .row{background:var(--panel); padding:16px 20px;}
+  .reg .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:6px; display:inline-block;}
+  .tag.low{color:var(--learn);} .tag.res{color:var(--faint);}
+  .reg h3{font-size:15px; margin-bottom:4px;} .reg p{margin:0; font-size:14px; color:var(--muted);}
+
+  .checks{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
+  .checks li{display:grid; grid-template-columns:20px 1fr; gap:12px; font-size:15px; color:var(--muted);}
+  .checks .ck{color:var(--ok); font-weight:700;}
+  .checks b{color:var(--ink); font-weight:600;}
+  .callout{background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 18px; color:var(--muted); font-size:15px;}
+  .callout b{color:var(--ink);}
+
+  footer{border-top:1px solid var(--hair); padding:34px 0 60px; color:var(--faint); font-size:13px;}
+  .nextlink{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--hair); margin-bottom:22px; flex-wrap:wrap;}
+  .nextlink .lab{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+  .nextlink a{font-size:19px; font-weight:600;}
+  .paths{font-family:var(--mono); font-size:12px; color:var(--faint); line-height:1.8;}
+</style>
+
+<div class="rail"><div class="wrap">
+  <a class="mark" href="index.html" style="text-decoration:none">PROKURA</a>
+  <div class="steps"><a class="done" href="index.html" style="text-decoration:none">M0</a><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><a class="done" href="m3-human-approval.html" style="text-decoration:none">M3</a><i>·</i><a class="done" href="m4-mcp-authorization.html" style="text-decoration:none">M4</a><i>·</i><a class="done" href="m5-rag-authorization.html" style="text-decoration:none">M5</a><i>·</i><a class="done" href="m6-threat-model.html" style="text-decoration:none">M6</a><i>·</i><a class="done" href="m7-correct-parties.html" style="text-decoration:none">M7</a><i>·</i><span class="cur">M8</span></div>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Milestone 08 · Authority console</p>
+    <h1>One place to read the register and tear up the grant</h1>
+    <p class="thesis">Power of attorney is only tolerable if you can <b>see who acts for you</b> and <b>revoke it in one click</b>. After M7 every party is correct, but the principal's own view was scattered across four surfaces and a log store. M8 is the <b>"my agents" panel</b>: one signed-in page showing every agent that acts for you, the grants each can use, your pending approvals, your notification topic, and a live activity feed — plus per-agent revoke and "connect a provider". It adds <b>no new authority</b>: it's a trusted <b>surface</b> that relays your own authority downstream by token exchange, with the broker still the sole writer.</p>
+    <div class="meta">
+      <span class="chip status">Shipped · 2026-08-10</span>
+      <span class="chip">add-authority-console</span>
+      <span class="chip">services/authority · :8160</span>
+      <span class="chip">correct-party gaps · all closed</span>
+    </div>
+  </header>
+  <hr>
+
+  <section>
+    <p class="lead">M7 put the correct party in every capacity. But ask the actual question a delegator asks — <i>"what acts for me right now, and how do I stop it?"</i> — and v0 had no answer in one place. Agents and their consents lived in OpenFGA tuples; pending approvals in the approval service; the notification topic derivable only inside that service; the activity in Loki; grants in the broker. Five sources, four surfaces, one login each. M8 aggregates them behind a single OIDC session and adds the two verbs that make a register a <i>governance</i> tool: <b>revoke</b> and <b>connect</b>.</p>
+  </section>
+
+  <section>
+    <p class="kicker">By the numbers</p>
+    <div class="nums">
+      <div><div class="n">1</div><div class="l">signed-in page: agents, grants, approvals, topic, activity — for the principal only</div></div>
+      <div><div class="n">0</div><div class="l">new writers of authorization state — the broker stays the sole <code>can_use</code> writer</div></div>
+      <div><div class="n">4/4</div><div class="l">correct-party gaps now closed (M8 shuts B-linking and topic onboarding)</div></div>
+      <div><div class="n">82</div><div class="l">smoke tests green through the new surface</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">The headline</p>
+    <h2>A trusted surface that relays <i>your</i> authority, never a service acting for nobody</h2>
+    <p class="lead">The console never asserts who you are and never holds a service credential that acts on authorization state. It signs you in with its own confidential <code>authority-ui</code> client and keeps your tokens <b>server-side</b> (the cookie carries only signed claims). For every downstream read or action it performs an <b>RFC 8693 token exchange</b> — as the <code>authority-console</code> client — into the exact audience it needs: <code>aud=token-broker</code> to list and revoke consents, <code>aud=approval</code> to read your approvals and topic. The exchanged token <b>preserves your subject</b>, so downstream the owner is the verified token subject — the same guard M7 built, reused unchanged.</p>
+    <p class="lead">That is the whole trick to adding a surface without adding authority: the broker still writes every tuple, the approval service still owns the topic salt and every decision, and the console just carries your own bearer to them. A confused-deputy shape — a surface that asserts a username out of band — is exactly what this design refuses.</p>
+  </section>
+
+  <section>
+    <p class="kicker">The register</p>
+    <h2>Everything that acts for you, on one page</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span><b>My agents</b> — every agent whose <code>operator</code> is you (read from OpenFGA directly, the console's own read position), each with its consented grants and scopes, and a <b>Revoke</b> button per grant.</span></li>
+      <li><span class="ck">✓</span><span><b>Pending &amp; recent approvals</b> — read from the approval service with your exchanged token; decisions still happen only on <code>:8120</code>, so each row <b>deep-links</b> there — the console links the ceremony, it never re-implements it.</span></li>
+      <li><span class="ck">✓</span><span><b>Connect a provider</b> — routes you into Keycloak account linking (<code>kc_action=idp_link</code>) in your own browser; on return the console imports the grant with your exchanged token. Closes Flow B's last ❌ — no admin API, no demo driver.</span></li>
+      <li><span class="ck">✓</span><span><b>Notifications</b> — your unguessable ntfy topic and a subscribe QR, from a user-bound read API. The topic salt never leaves the approval service; the topic stays notify-only (ADR-0007).</span></li>
+      <li><span class="ck">✓</span><span><b>Activity</b> — the already-correlated Loki audit lines, filtered <b>server-side</b> to your username before anything leaves the backend, so one principal can never read another's activity.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <p class="kicker">One click, honest about what it does</p>
+    <h2>Revoke converges on the broker; both paths, one audit event</h2>
+    <p class="lead">Clicking Revoke exchanges your token for <code>aud=token-broker</code> and calls the broker's revoke — the <b>same code path and same audit event</b> as revoking from the M7 consent screen. Because revoke only ever deletes a tuple under <code>grant:{you}/…</code>, a foreign subject can never revoke your delegation. The console is honest about latency: effect applies on the agent's <i>next</i> token request — <i>instant</i> propagation is M9. Verified by looking: the tuple leaves OpenFGA, a <code>consent_revoked … azp=authority-console</code> line lands in Loki, and the revoked agent's next hand-out is refused <code>403 not_consented</code>.</p>
+    <div class="callout"><b>The separation invariant held, and grew.</b> The authority service's source contains no user password and no CIBA or decision call — it is a surface, not a ceremony. <code>test_party_separation.py</code> greps it and fails the build if a password or a <code>/decide</code> call ever appears. (It <i>may</i> relay a revoke — that's the point — with your exchanged bearer, the broker still the sole writer.)</div>
+  </section>
+
+  <footer>
+    <div class="nextlink">
+      <div><div class="lab">Previous milestone</div><a href="m7-correct-parties.html">← M7 · The Scripts Stop Playing the Human</a></div>
+      <div style="text-align:right"><div class="lab">The decision</div><a href="https://github.com/patrickdaj/prokura/blob/main/docs/adr/0023-the-authority-console-is-an-aggregating-trusted-surface.md">ADR-0023 →</a></div>
+    </div>
+    <div class="paths">
+      services/authority &nbsp;·&nbsp; :8160 · OIDC session + server-side tokens + RFC 8693 exchange (authority-ui / authority-console)<br>
+      services/token-broker &nbsp;·&nbsp; /v1/consents + bearer /v1/consent/revoke &nbsp;·&nbsp; services/approval &nbsp;·&nbsp; /v1/my/approvals + /v1/my/topic<br>
+      tests/smoke/humankit.py &nbsp;·&nbsp; the labeled simulated human, extended to :8160 &nbsp;·&nbsp; spike/authority-agg — the de-risk
+    </div>
+  </footer>
+</div>

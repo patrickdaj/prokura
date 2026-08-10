@@ -32,6 +32,7 @@ records ones already made. Format: [`0000-template.md`](./0000-template.md).
 | [0020](./0020-a-local-offline-deterministic-embedder-for-rag-demo-grade.md) | A local, offline, deterministic embedder for RAG (demo-grade) | accepted | M5 |
 | [0021](./0021-adrs-are-derived-from-openspec-the-specs-remain-the-source-o.md) | ADRs are derived from OpenSpec; the specs remain the source of truth | accepted | this change |
 | [0022](./0022-the-approval-service-owns-the-ciba-ceremony-server-initiated.md) | The approval service owns the CIBA ceremony (server-initiated) | accepted | close-correct-party-gaps (M7) |
+| [0023](./0023-the-authority-console-is-an-aggregating-trusted-surface.md) | The authority console is an aggregating trusted surface, not a new authority | accepted | add-authority-console (M8) |
 
 ## Supersession chains
 
@@ -64,6 +65,7 @@ accepted ADR or to a reasoned exclusion. Nothing is silently missing.
 | Locked: born-instrumented observability | ADR-0017 |
 | Locked: reactive step-up (M4) | ADR-0018 |
 | Locked: server-initiated CIBA (M7) | ADR-0022 |
+| Locked: authority console as aggregating surface (M8) | ADR-0023 |
 | Locked: pgvector-in-Postgres (M5) | ADR-0019 |
 | Locked: offline embedder (M5) | ADR-0020 |
 | ADR method (this change) | ADR-0021 |

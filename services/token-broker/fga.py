@@ -64,6 +64,23 @@ def agent_operator(agent: str) -> str | None:
     return who.split(":", 1)[1] if ":" in who else who
 
 
+def list_can_use_agents(user: str, provider: str) -> list[str]:
+    """Every agent with a ``can_use`` tuple on ``grant:{user}/{provider}`` — the
+    consent register for one grant (M8 console read; same read shape as
+    delete_all_can_use, without the delete)."""
+    r = httpx.post(
+        f"{_base()}/stores/{store_id()}/read",
+        json={"tuple_key": {"object": f"grant:{user}/{provider}", "relation": "can_use"}},
+        timeout=10.0,
+    )
+    r.raise_for_status()
+    agents = []
+    for t in r.json().get("tuples", []):
+        who = t["key"]["user"]  # "agent:{id}"
+        agents.append(who.split(":", 1)[1] if ":" in who else who)
+    return sorted(agents)
+
+
 def write_can_use(agent: str, user: str, provider: str) -> None:
     with tracer().start_as_current_span("fga.write") as span:
         span.set_attribute("prokura.fga.relation", "can_use")
@@ -90,7 +107,11 @@ def delete_can_use(agent: str, user: str, provider: str) -> None:
         }]}},
         timeout=10.0,
     )
-    if r.status_code >= 400 and "not found" not in r.text.lower():
+    # Revoke is idempotent: a missing tuple is already-revoked, not an error.
+    # OpenFGA phrases this as "cannot delete a tuple which does not exist".
+    body = r.text.lower()
+    if r.status_code >= 400 and "not found" not in body and "does not exist" not in body \
+            and "did not exist" not in body:
         r.raise_for_status()
 
 

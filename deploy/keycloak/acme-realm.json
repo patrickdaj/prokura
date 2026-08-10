@@ -16,6 +16,15 @@
       "firstName": "Alice",
       "lastName": "External",
       "credentials": [ { "type": "password", "value": "alice", "temporary": false } ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@acme.example",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "External",
+      "credentials": [ { "type": "password", "value": "bob", "temporary": false } ]
     }
   ],
   "clients": [

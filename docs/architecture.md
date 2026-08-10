@@ -159,10 +159,10 @@ as intended vs. who actually shows up today:
 | Flow | Capacity as intended | Who fills it today | Closure |
 |------|----------------------|--------------------|---------|
 | **A** — delegation | User present at login; explicit "act on your behalf" consent | ✅ Real for interactive MCP clients (browser login; realm DCR policy forces `consentRequired`). ✅ **Closed (M7):** the `act-on-your-behalf` consent scope is a `realm-export.json` fixture (`consentRequired` on `agent-app`, realm-default for scope-less DCR clients); headless bootstrap is the Device Authorization Grant — no agent code holds a user password | ✅ **M7** |
-| **B** — grant linking | User links their provider account (user-present, one time) | ❌ `spike/idp-link` drives alice's login headlessly; no user-facing entry point routes a real person into `kc_action=idp_link` | Console "connect a provider" entry → Keycloak account linking (M8) |
-| **B** — per-agent consent | User approves *this agent may use this grant* on the broker's trusted screen | ✅ **Closed (M7):** `/consent` sits behind a real OIDC session (`broker-ui` client, signed cookie); the owner of every `can_use` write/revoke is the session identity — `?token=` is gone | ✅ **M7** (console aggregation follows in M8) |
+| **B** — grant linking | User links their provider account (user-present, one time) | ✅ **Closed (M8):** the authority console's "connect a provider" routes a real signed-in person into `kc_action=idp_link` in their own browser; on return the console imports the grant with the user's own exchanged token — no admin API, no demo driver (`test_connect_provider_end_to_end`) | ✅ **M8** |
+| **B** — per-agent consent | User approves *this agent may use this grant* on the broker's trusted screen | ✅ **Closed (M7):** `/consent` sits behind a real OIDC session (`broker-ui` client, signed cookie); the owner of every `can_use` write/revoke is the session identity — `?token=` is gone. ✅ **M8:** revoke is now also one-click from the authority console, relayed as the user's exchanged bearer (`aud=token-broker`); the broker stays the sole tuple writer and both paths converge on one audit event | ✅ **M7** (console revoke + aggregation M8) |
 | **C** — CIBA initiation | The ceremony is initiated by a trusted party, never the agent | ✅ **Closed (M7, ADR-0022):** the approval service initiates CIBA at registration with its own client (`login_hint` from *verified* claims); `agent-app` lost the CIBA grant — a real external agent **cannot** touch the ceremony, legitimately or otherwise | ✅ **M7** |
-| **C** — decision | Human gets a push, opens the trusted UI in an authenticated session, decides | ✅ **Closed (M7):** the ntfy deep link (`/approvals#ref`) lands on an OIDC login (`approval-ui` client); the ref survives the round-trip in the signed OAuth `state`; decisions exist only inside that session (no bearer path). Notification onboarding (showing a user their topic) remains for the M8 console | ✅ **M7** (topic onboarding → M8) |
+| **C** — decision | Human gets a push, opens the trusted UI in an authenticated session, decides | ✅ **Closed (M7):** the ntfy deep link (`/approvals#ref`) lands on an OIDC login (`approval-ui` client); the ref survives the round-trip in the signed OAuth `state`; decisions exist only inside that session (no bearer path). ✅ **M8:** notification onboarding closed — the authority console shows the signed-in user their topic + subscribe QR via a user-bound read API (`aud=approval`); the topic salt never leaves the approval service | ✅ **M7** (topic onboarding M8) |
 | **D** — filtered retrieval | Every candidate chunk authorized **as the end user** | ✅ Correct by construction (exchanged token, `batch_check` as `user:{sub}`). ✅ **M7:** tuple sync decoupled from the vector-seed guard — startup reconciliation survives an FGA store reset | ✅ (tuple *source* from real provider ACLs → M12) |
 
 The root cause was singular: **no trusted surface had a session, and dev credentials in
@@ -173,9 +173,15 @@ bootstrap is the device flow, and the test suite quarantines its one simulated h
 `tests/smoke/humankit.py` (a labeled Playwright driver of the real login + surfaces; a
 grep-able invariant test keeps user credentials and ceremony calls out of agent-side
 kits). The agent's role in Flow C is now exactly: receive the 428, wait, retry with the
-action token. What remains for the authority console (M8) is *aggregation and
-onboarding* — one place to see and revoke authority, and a way to hand the user their
-notification topic — not party correctness.
+action token. **M8 (`add-authority-console`) then delivered the *aggregation and
+onboarding* layer:** a user-facing "my agents" panel (`services/authority`, :8160)
+behind its own OIDC session that shows the signed-in principal their agents, consented
+grants, approvals, notification topic and live activity, and offers one-click per-agent
+revoke and "connect a provider" — closing Flow B's last ❌ and the topic-onboarding
+tail. The console is a trusted *surface*, not a new authority: it relays the user's own
+authority downstream by RFC 8693 exchange (subject preserved), the broker stays the sole
+tuple writer, and its source holds no password and no ceremony call (the M7 separation
+invariant, extended). Every correct-party gap is now closed in place.
 
 ### Beyond parity — where Prokura earns its keep
 
@@ -311,14 +317,20 @@ real external client (Claude Code) with the human approving in their own authent
 browser session — zero in-repo credentials touched by any agent. (Exactly the run that
 failed on 2026-08-08.)
 
-**M8 — Authority console** (thesis 1). The "my agents" panel: per-agent grants and scopes,
-pending-approvals inbox, "connect a provider" entry into `kc_action=idp_link`, notification
-onboarding (show/QR your ntfy topic), live activity feed from the correlated Loki audit
-lines, and per-agent revoke (consent-tuple removal + Keycloak session revocation — the
-parts that exist today; *instant* is M9). M7's surfaces fold into or link from it. *Spike:*
-the aggregation query — one view joining FGA tuples, approval state, and audit lines for
-one principal. *New capability spec:* `authority-console`. **Exit:** a human reads the
-register and tears up a grant, on camera.
+**M8 — Authority console** (thesis 1). ✅ **Delivered (`add-authority-console`).** The "my
+agents" panel (`services/authority`, :8160): per-agent grants and scopes, pending-approvals
+inbox (deep-linking to :8120), "connect a provider" entry into `kc_action=idp_link`,
+notification onboarding (topic + subscribe QR), live activity feed from the correlated Loki
+audit lines, and per-agent revoke (consent-tuple removal — *instant* is M9). It is a trusted
+*surface* with its own OIDC session (`authority-ui`) that relays the user's own authority
+downstream by RFC 8693 exchange (`authority-console` → `aud=token-broker`/`aud=approval`,
+subject preserved); the broker stays the sole `can_use` writer and the narrow read/revoke
+APIs on broker/approval are user-bound-bearer only. M7's surfaces are linked, not
+duplicated. *Spike:* the aggregation query joining FGA tuples, approval state, and audit
+lines for one principal, plus the exchange chain and console-initiated `idp_link`
+(`spike/authority-agg`). *New capability spec:* `authority-console`. **Exit met:** a human
+reads the register and tears up a grant (verified by looking — tuple gone, audit line,
+refused hand-out) and connects a provider end-to-end with no admin API.
 
 **M9 — The kill switch** (thesis 3). Instant revocation and continuous evaluation:
 revocation propagates in seconds (per-hand-out consent check + Keycloak session/offline
