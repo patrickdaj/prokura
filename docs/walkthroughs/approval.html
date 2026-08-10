@@ -66,7 +66,7 @@
     <p>Pulled live from the Tempo API: the retry decomposed across four services. Note the
       <code>approval.consume</code> → <code>POST /consume</code> gate — the hash check and single-use
       consumption — happening <i>before</i> <code>email.send</code>.</p>
-    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo · { prokura.flow = "C" }</span></div>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo · { .prokura.flow = "C" }</span></div>
       <div class="body"><a href="img/trace-flowC.png" target="_blank" rel="noopener"><img src="img/trace-flowC.png" alt="Real Grafana/Tempo waterfall for a Flow C trace: mcp POST /mcp → tool.send_email → keycloak.mcp_exchange → tools-api POST /tools/email/send → approval.consume → approval POST /consume (verify + single-use) → email.send"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> the verification gate is on the execution path — reconstructable from telemetry, not taken on trust.</div>

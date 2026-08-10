@@ -76,7 +76,7 @@
     <p>Pulled live from the Tempo API: <code>rag_search</code> decomposed. The vector search
       (<code>pgvector.top_k</code>) finds candidates; then <code>fga.batch_check</code> authorizes them
       <b>as the querying user</b> against OpenFGA — the retriever never evaluates as the agent.</p>
-    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo · { prokura.flow = "D" }</span></div>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo · { .prokura.flow = "D" }</span></div>
       <div class="body"><a href="img/trace-flowD.png" target="_blank" rel="noopener"><img src="img/trace-flowD.png" alt="Real Grafana/Tempo waterfall for a Flow D trace: mcp POST /mcp → tool.rag_search → keycloak.mcp_exchange → rag POST /rag/search → rag.search → pgvector.top_k → fga.batch_check → openfga, 87 spans across 4 services"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> the authorization is on the retrieval path, evaluated as the user — visible in telemetry, not asserted.</div>

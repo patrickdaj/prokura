@@ -35,7 +35,7 @@
     <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo</span></div>
       <div class="body"><a href="img/trace-postmortem.png" target="_blank" rel="noopener"><img src="img/trace-postmortem.png" alt="Real Grafana/Tempo waterfall: mcp POST /mcp → tool.rag_search → keycloak.mcp_exchange → rag POST /rag/search → rag.search → pgvector.top_k → fga.batch_check → openfga"></a></div>
     </div>
-    <div class="cap"><b>Reads as:</b> query embedded → top-K found → each candidate authorized as <code>user:bob</code> → response. Search <code>{ prokura.flow = "D" }</code> to open it yourself.</div>
+    <div class="cap"><b>Reads as:</b> query embedded → top-K found → each candidate authorized as <code>user:bob</code> → response. Search <code>{ .prokura.flow = "D" }</code> to open it yourself.</div>
   </div></div></section>
 
   <section><div class="stage"><div class="idx">B</div><div>
