@@ -11,7 +11,7 @@ Endpoints:
                       user:{preferred_username} -> only authorized chunks (+ answer)
 
 Ingestion (Drive-shaped manifest -> tuples then embeddings) runs at startup.
-Born instrumented: traceparent join key + prokura.correlation_id, realtime rag_audit.
+Born instrumented: traceparent join key + native trace context, realtime rag_audit.
 """
 
 import audit
@@ -23,10 +23,10 @@ import validation
 from embedder import embed
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
-from telemetry import current_traceparent, setup_telemetry, tracer
+from prokura_telemetry import setup, stamp_flow, tracer
 
 app = FastAPI(title="prokura-rag")
-setup_telemetry(app)
+setup(app, config.SERVICE_NAME)
 
 
 @app.on_event("startup")
@@ -79,6 +79,9 @@ async def search(request: Request,
     # insufficient for a user-context retrieval (Flow D).
     user = validation.end_user(claims)
     agent = claims.get("azp")
+    # Flow D (FGA-filtered RAG): tag the root span so `{ prokura.flow = "D" }` finds
+    # this retrieval end-to-end.
+    stamp_flow("D", user=user, agent=agent)
     if not user:
         audit.emit(decision="denied_no_user", agent=agent)
         raise _Http(403, "no_end_user")
@@ -95,7 +98,6 @@ async def search(request: Request,
 
     with tracer().start_as_current_span("rag.search") as span:
         span.set_attribute("prokura.rag.user", user)
-        span.set_attribute("prokura.correlation_id", current_traceparent())
         # 1. Retrieve candidates by vector similarity (pre-authorization).
         candidates = db.top_k(embed(query), k)
         candidate_docs = list(dict.fromkeys(c["doc_id"] for c in candidates))

@@ -66,20 +66,8 @@
     <p>Pulled live from the Tempo API: the retry decomposed across four services. Note the
       <code>approval.consume</code> → <code>POST /consume</code> gate — the hash check and single-use
       consumption — happening <i>before</i> <code>email.send</code>.</p>
-    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8095 — send_email, decomposed</span></div>
-      <div class="body">
-<div class="wf wide">
-<div class="legend"><span><i class="bar-appr"></i>approval</span><span><i class="bar-kc"></i>keycloak</span><span><i class="bar-mcp"></i>mcp</span><span><i class="bar-tools"></i>tools-api</span><span style="margin-left:auto">trace db623dab0324d9bc… · 8 key spans · 43 ms end-to-end</span></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>POST /mcp</div><div class="track"><div class="bar bar-mcp" style="left:0.0%;width:100.0%"></div></div><div class="d">42.7</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>tool.send_email</div><div class="track"><div class="bar bar-mcp" style="left:1.9%;width:97.0%"></div></div><div class="d">41.5</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>keycloak.mcp_exchange</div><div class="track"><div class="bar bar-mcp" style="left:2.0%;width:29.6%"></div></div><div class="d">12.7</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:18.0%;width:12.8%"></div></div><div class="d">5.5</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-tools">tools-api</span>POST /tools/email/send</div><div class="track"><div class="bar bar-tools" style="left:43.7%;width:54.7%"></div></div><div class="d">23.4</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-tools">tools-api</span>approval.consume</div><div class="track"><div class="bar bar-tools" style="left:44.8%;width:39.7%"></div></div><div class="d">17.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-appr">approval</span>POST /consume (verify + single-use)</div><div class="track"><div class="bar bar-appr" style="left:59.4%;width:24.5%"></div></div><div class="d">10.5</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-tools">tools-api</span>email.send</div><div class="track"><div class="bar bar-tools" style="left:84.7%;width:12.8%"></div></div><div class="d">5.5</div></div>
-</div>
-      </div>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo · { prokura.flow = "C" }</span></div>
+      <div class="body"><a href="img/trace-flowC.png" target="_blank" rel="noopener"><img src="img/trace-flowC.png" alt="Real Grafana/Tempo waterfall for a Flow C trace: mcp POST /mcp → tool.send_email → keycloak.mcp_exchange → tools-api POST /tools/email/send → approval.consume → approval POST /consume (verify + single-use) → email.send"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> the verification gate is on the execution path — reconstructable from telemetry, not taken on trust.</div>
   </div></div></section>

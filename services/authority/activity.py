@@ -12,7 +12,7 @@ import time
 import httpx
 
 import config
-from telemetry import tracer
+from prokura_telemetry import tracer
 
 # Audit streams that carry per-principal lines (broker/approval/mcp/rag).
 _STREAMS = 'service_name=~"token-broker|approval|mcp|rag|keycloak"'

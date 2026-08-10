@@ -16,7 +16,7 @@
   <header class="hero">
     <p class="eyebrow">Guided walkthrough · the whole demo, one sitting</p>
     <h1>Watch an agent act for a user — and stop exactly where it should</h1>
-    <p class="thesis">A single MCP client, holding only an <code>aud=mcp-server</code> token, walks the whole chain: it <b>discovers</b> the server, <b>registers itself</b>, <b>logs the user in</b>, gets a <b>consent-gated</b> third-party token, has a human <b>approve</b> a gated email, and runs a RAG query that returns <b>only what the user may see</b>. Every screen below is a faithful recreation rendered from a real run of the stack — real correlation IDs, real audit lines, real rankings.</p>
+    <p class="thesis">A single MCP client, holding only an <code>aud=mcp-server</code> token, walks the whole chain: it <b>discovers</b> the server, <b>registers itself</b>, <b>logs the user in</b>, gets a <b>consent-gated</b> third-party token, has a human <b>approve</b> a gated email, and runs a RAG query that returns <b>only what the user may see</b>. The UI surfaces and the telemetry below are <b>real screenshots</b> — OpenBao, the authority console, the Grafana/Tempo trace; the inline terminal and card illustrations are rendered from real runs of the stack.</p>
     <div class="meta">
       <span class="chip ok">Reproducible · docker compose up</span>
       <span class="chip">real MCP client</span>
@@ -31,6 +31,7 @@
 <span class="p">$</span> python demo/run_demo.py     <span class="c"># a real MCP client, narrated to watch</span>
 <span class="o">ACT 1</span> connect (aud=mcp-server)   <span class="o">ACT 2</span> consent-gated token
 <span class="o">ACT 3</span> human-approved email       <span class="o">ACT 4</span> FGA-filtered RAG
+<span class="o">CODA</span> the human's control surface — who acts for you, revoke in one click
 <span class="g">✓</span> <span class="o">everything below, driven live — then verify with</span> pytest tests/smoke</pre></div>
     </div>
   </section>
@@ -84,7 +85,11 @@ token.aud = <span class="g">"mcp-server"</span>   sub = alice
   <span class="c">// no refresh_token — it never leaves OpenBao</span>
 }</pre></div>
     </div>
-    <div class="cap"><b>What it proves:</b> the agent gets a bounded access token; the refresh credential stays in OpenBao. → <a href="delegation.html">Delegation deep-dive</a> · <a href="../blog/m1-token-exchange.html">M1 blog</a></div>
+    <p style="margin:14px 0 0">And it is <i>shown</i>, not just asserted: the durable refresh credential sits in OpenBao at <code>secret/grants/alice/acme</code>, written by the broker (the sole writer) and masked by the vault — the agent, and this page, only ever see dots.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8200 — OpenBao · secret/grants/alice/acme</span></div>
+      <div class="body"><a href="img/flowB-openbao.png" target="_blank" rel="noopener"><img src="img/flowB-openbao.png" alt="OpenBao UI showing the stored grant secret/grants/alice/acme with the credential masked, kind refresh_token, and scopes"></a></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the agent gets a bounded access token; the refresh credential stays sealed in OpenBao — you can see it there. → <a href="brokering.html">Brokering deep-dive</a> · <a href="delegation.html">Delegation deep-dive</a> · <a href="../blog/m1-token-exchange.html">M1 blog</a></div>
   </div></div></section>
 
   <!-- STAGE 4 -->
@@ -143,23 +148,21 @@ token.aud = <span class="g">"mcp-server"</span>   sub = alice
   <!-- STAGE 6 -->
   <section><div class="stage"><div class="idx">06</div><div>
     <h3>Watch it as one trace</h3>
-    <p>The whole thing is one linked trace. In the Prokura Console, click the <code>POST /mcp</code> trace, expand the <code>rag.search</code> span, and hit <b>"show correlated audit logs"</b> — jumping from the trace to its audit records in Loki, joined by the correlation id.</p>
-    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">:8095 console · span waterfall</span></div>
-      <div class="body">
-        <div class="wf">
-          <div class="sp"><span class="nm"><span class="svc svc-mcp">mcp</span> tool.rag_search</span><span class="track"><span class="bar bar-mcp" style="left:2%;width:96%"></span></span><span class="d">20.5</span></div>
-          <div class="sp"><span class="nm"><span class="svc svc-kc">keycloak</span> mcp_exchange</span><span class="track"><span class="bar bar-kc" style="left:4%;width:28%"></span></span><span class="d">6.8</span></div>
-          <div class="sp"><span class="nm"><span class="svc svc-rag">rag</span> rag.search</span><span class="track"><span class="bar bar-rag" style="left:40%;width:48%"></span></span><span class="d">9.3</span></div>
-          <div class="sp"><span class="nm"><span class="svc svc-rag">rag</span> pgvector.top_k</span><span class="track"><span class="bar bar-rag" style="left:44%;width:20%"></span></span><span class="d">4.2</span></div>
-          <div class="sp"><span class="nm"><span class="svc svc-fga">openfga</span> BatchCheck</span><span class="track"><span class="bar bar-fga" style="left:78%;width:9%"></span></span><span class="d">0.23</span></div>
-        </div>
-        <div style="margin-top:12px; border-left:2px solid var(--hair); padding-left:10px" class="audit">
-          <div class="ln"><span class="t">13:08:34</span> <span class="tag">mcp_audit</span> <span class="id">correlation_id=02491050…f75fc0</span> <span class="ok">decision=rag_retrieved</span> user=bob tool=rag_search allowed=3</div>
-          <div class="ln"><span class="t">13:08:34</span> <span class="tag">rag_audit</span> <span class="id">correlation_id=02491050…f75fc0</span> <span class="ok">decision=retrieved</span> user=bob candidates=4 allowed=3</div>
-        </div>
-      </div>
+    <p>The whole flow is one legible trace. In Grafana → <b>Explore → Tempo</b>, search <code>{ prokura.flow = "D" }</code> to land on exactly this trace — health-check noise carries no flow tag, so it never shows up. The waterfall reads as the story: <code>mcp → keycloak (exchange) → rag → pgvector → openfga</code>. Each span's <b>events</b> carry the decisions (<code>rag_retrieved</code>, <code>retrieved</code>); a denied step would render <b>red</b>; and the <b>Tempo→Loki</b> jump moves from any span to its audit lines, joined natively by the trace id — no correlation-id copy.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo · { prokura.flow = "D" }</span></div>
+      <div class="body"><a href="img/trace-flowD.png" target="_blank" rel="noopener"><img src="img/trace-flowD.png" alt="A real Grafana/Tempo waterfall for one Flow D trace: mcp POST /mcp → tool.rag_search → keycloak.mcp_exchange → rag POST /rag/search → rag.search → pgvector.top_k → openfga, 87 spans across 4 services"></a></div>
     </div>
-    <div class="cap"><b>What it proves:</b> "what happened" (the trace) joins to "the audit record of it" (the logs) under one id. Real trace <code>22491050…</code>, real audit lines.</div>
+    <div class="cap"><b>What it proves:</b> "what happened" (the trace) joins to "the audit record of it" (the logs) natively, by the trace id. One flow, one legible trace — in Grafana, the real tool, no bespoke console.</div>
+  </div></div></section>
+
+  <!-- STAGE 7 -->
+  <section><div class="stage"><div class="idx">07</div><div>
+    <h3>The human stays in control</h3>
+    <p>Stages 01–06 are the <i>agent's</i> happy path. This one is <b>yours</b>. The authority console is the principal's own surface: sign in and see, in one place, <b>who acts for you</b> — every agent you operate, each with its consented grants and scopes — and <b>revoke any delegation in one click</b>. It mints no new authority: each read and the revoke relay <i>your own</i> token by RFC 8693 exchange, so downstream the owner is you, the verified subject.</p>
+    <div class="screen pic trim"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8160 — your authority register</span></div>
+      <div class="body"><a href="img/authority-register.png" target="_blank" rel="noopener"><img src="img/authority-register.png" alt="The authority console signed in as alice: My agents lists agent-app and mcp-server, each operator: you, each with an acme grant (openid email profile) and a Revoke button"></a></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> delegation is legible and reversible from the human's side — see who acts for you, revoke in one click, no new authority granted. → <a href="authority.html">Authority console deep-dive</a> · <a href="revocation.html">The kill switch</a></div>
   </div></div></section>
 
   <section>
@@ -183,6 +186,6 @@ token.aud = <span class="g">"mcp-server"</span>   sub = alice
       <div><div class="lab">Build log</div><a href="../blog/index.html">Milestone blog series →</a></div>
       <div style="text-align:right"><div class="lab">As built</div><a href="https://github.com/patrickdaj/prokura/blob/main/docs/architecture.md">Architecture →</a></div>
     </div>
-    <p class="note">Screens are faithful recreations rendered from real runs of the compose stack (real correlation IDs, audit lines, and rankings), consistent with the illustration style of the milestone blogs.</p>
+    <p class="note">UI surfaces (OpenBao, the authority console) and the telemetry (Grafana/Tempo) are real screenshots captured from the compose stack; the inline terminal and card illustrations are rendered from real runs, consistent with the illustration style of the milestone blogs.</p>
   </footer>
 </div>

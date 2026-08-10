@@ -14,8 +14,9 @@ they happen:
   4. FGA-filtered RAG: alice retrieves a protected doc; bob provably cannot —
      even though it is his top embedding hit
 
-Run:  docker compose up -d  &&  python demo/run_demo.py
-Then watch the same flow as one linked trace in the console (http://localhost:8095).
+Run:  docker compose --profile demo up -d  &&  python demo/run_demo.py
+Then watch the same flow as one linked trace in Grafana (http://localhost:3001):
+Explore → Tempo, search { prokura.flow = "C" }.
 
 It reuses the exact client machinery the smoke tests use (tests/smoke/), so the
 demo and the tests drive the identical real handshake — the difference is that this
@@ -30,6 +31,7 @@ import httpx
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tests", "smoke"))
 import approvalkit as ak  # noqa: E402
 import brokerkit  # noqa: E402
+import humankit  # noqa: E402
 import mcpkit  # noqa: E402
 import ragkit  # noqa: E402
 from conftest import KEYCLOAK_URL, link_acme  # noqa: E402
@@ -62,7 +64,8 @@ def preflight():
         httpx.get(f"{ragkit.RAG_URL}/healthz", timeout=5).raise_for_status()
         httpx.get(f"{ak.TOOLS_URL}/healthz", timeout=5).raise_for_status()
     except Exception:
-        print(red("The stack isn't up. Start it first:  docker compose up -d"))
+        print(red("The stack isn't up (or the toy resource servers aren't running). "
+                  "Start the full chain:  docker compose --profile demo up -d"))
         sys.exit(1)
 
 
@@ -71,7 +74,11 @@ def setup():
     link_acme(KEYCLOAK_URL)
     brokerkit.import_grant(brokerkit.broker_token(), "acme")
     brokerkit.seed_operator(AGENT, "alice")
-    brokerkit.consent(brokerkit.user_token(), AGENT, "acme")
+    # Consent is a HUMAN capacity (the broker is the sole writer and has no bearer
+    # path) — alice grants it on the real consent surface, in her own browser.
+    consented, _ = humankit.drive_consent(AGENT, "acme")
+    if not consented:
+        no("consent was not written — is the stack up with --profile demo?"); sys.exit(1)
     ok("ready\n")
 
 
@@ -86,7 +93,7 @@ def main():
         step("POST /mcp with no token → the server challenges")
         # (the discovery 401 → PRM → Keycloak AS, DCR, and OAuth2.1+PKCE all happen
         # inside mcp_token — the same standard handshake a real client performs)
-        alice = ragkit.mcp_token(c, "alice", "alice")
+        alice = ragkit.mcp_token(c, "alice")
         cl = ragkit.token_claims(alice)
         ok("discovered metadata, registered dynamically, logged in as alice")
         kv("token aud", green(str(cl.get("aud"))))
@@ -121,14 +128,13 @@ def main():
         ref, action_token = challenge.get("ref"), challenge.get("action_token")
         ok(f"the resource server refused and registered the real action  {dim('(428 approval_required)')}")
         kv("reference", gold(ref))
-        with httpx.Client(timeout=40.0) as ac:
-            step("the agent drives CIBA for that reference; a human approves it in the trusted UI")
-            ut = ak.user_token()
-            auth_req_id = ak.ciba_init(ref, ac)
-            ak.wait_delegated(ref, ut, ac)
-            ak.decide(ut, ref, True, ac)          # ← the human clicks Approve
-            ak.poll_token(auth_req_id, ac)
-            ok("approved — by a human, on the payload the server stored (not agent text)")
+        # The 428 already registered the exact {action, params} and the approval
+        # service initiated the CIBA ceremony (ADR-0022). The agent CANNOT approve —
+        # only the human can, on the trusted surface. alice approves that reference
+        # in her own session (never agent-authored text).
+        step("a human approves that reference in the trusted approval UI")
+        humankit.drive_approval(ref, approve=True)
+        ok("approved — by a human, on the payload the server stored (not agent text)")
         step("retry send_email with the approval — executes exactly once")
         sent, err = mcpkit.tool_call(c, alice, "send_email", {**params, "action_token": action_token})
         if sent.get("status") == "sent":
@@ -148,7 +154,7 @@ def main():
         (ok if a_has else no)(f"{b('alice')} (a viewer): retrieves the protected doc  {a_counts}")
         kv("answer mentions", green('Meridian acquisition') if 'Meridian' in alice_res['answer'] else red('nothing'))
 
-        bob = ragkit.mcp_token(c, "bob", "bob")
+        bob = ragkit.mcp_token(c, "bob")
         bob_res, _ = ragkit.search_via_mcp(c, bob, QUERY)
         b_has = "secret-roadmap" in ragkit.doc_ids(bob_res)
         b_counts = dim(f"candidates={bob_res['candidates']} allowed={bob_res['allowed']}")
@@ -156,8 +162,8 @@ def main():
         kv("answer mentions", red('never says Meridian') if 'Meridian' not in bob_res['answer'] else red('LEAK!'))
         ok("the confused-deputy is dead: the top hit leaks to no one who lacks the tuple")
 
-    print(f"\n{green('━'*66)}\n {green('done')} — now watch it as one linked trace: "
-          f"{b('http://localhost:8095')}\n"
+    print(f"\n{green('━'*66)}\n {green('done')} — now watch it as one trace in Grafana: "
+          f"{b('http://localhost:3001')} → Explore → Tempo, search {b('{ prokura.flow = \"D\" }')}\n"
           f"       or step through it: {b('docs/walkthroughs/index.html')}\n{green('━'*66)}\n")
     return 0
 

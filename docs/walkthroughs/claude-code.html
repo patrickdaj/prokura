@@ -52,7 +52,7 @@
     <ul class="checks">
       <li><span class="ck">✓</span><span>Your browser really opened <b>Keycloak's login</b> — the agent never saw the password.</span></li>
       <li><span class="ck">✓</span><span><code>claude mcp list</code> shows <b>prokura · Connected</b> with the three tools.</span></li>
-      <li><span class="ck">✓</span><span>Open the console at <a href="http://localhost:8095">localhost:8095</a> — the login + token exchange appear as a trace; the delegated token is <code>aud=mcp-server</code>, <code>exp ≤ 900 s</code>.</span></li>
+      <li><span class="ck">✓</span><span>Open Grafana at <a href="http://localhost:3001">localhost:3001</a> → Explore → Tempo, search <code>{ prokura.flow = "B" }</code> — the login + token exchange appear as one trace; the delegated token is <code>aud=mcp-server</code>, <code>exp ≤ 900 s</code>.</span></li>
     </ul>
     <div class="cap"><b>What it proves:</b> a real, independent MCP client obtains delegated authority through the standard handshake — nothing Prokura-specific on the client side. → <a href="delegation.html">Flow A deep-dive</a></div>
   </div></div></section>
@@ -67,7 +67,7 @@
     <ul class="checks">
       <li><span class="ck">✓</span><span>The result carries <code>expires_in: 900</code> and <b>no</b> <code>refresh_token</code>.</span></li>
       <li><span class="ck">✓</span><span>Open OpenBao at <a href="http://localhost:8200">localhost:8200</a> (dev root token <code>prokura-dev-root</code>) → <code>secret/grants/alice/acme</code> holds the refresh credential (masked) — <b>the durable secret Claude never receives</b>.</span></li>
-      <li><span class="ck">✓</span><span>In the console, the trace shows <code>fga.check</code> → OpenFGA, <code>openbao.read_grant</code>, and <code>provider.refresh</code> — all inside the one call.</span></li>
+      <li><span class="ck">✓</span><span>In the Tempo waterfall, the trace shows <code>fga.check</code> → OpenFGA, <code>openbao.read_grant</code>, and <code>provider.refresh</code> — all inside the one call.</span></li>
     </ul>
     <div class="cap"><b>What it proves:</b> the agent is handed a bounded capability; authorization and secret custody happen server-side. → <a href="brokering.html">Flow B deep-dive</a></div>
   </div></div></section>
@@ -106,7 +106,7 @@
     <ul class="checks">
       <li><span class="ck">✓</span><span><b>alice's</b> answer names <b>Meridian</b> (she is a viewer of <code>secret-roadmap</code>).</span></li>
       <li><span class="ck">✓</span><span><b>bob's</b> identical query <b>never mentions Meridian</b> — the same top hit is filtered out.</span></li>
-      <li><span class="ck">✓</span><span>In the console, each search logs <code>rag_audit … candidates=4 allowed=3</code>, and the trace shows <code>fga.batch_check</code> evaluated as the querying user.</span></li>
+      <li><span class="ck">✓</span><span>In Grafana, each search logs <code>rag_audit … candidates=4 allowed=3</code> (reachable via the Tempo→Loki jump), and the trace shows <code>fga.batch_check</code> evaluated as the querying user.</span></li>
     </ul>
     <div class="cap"><b>What it proves:</b> retrieval is authorized as the human, not the agent — the confused-deputy is dead. → <a href="rag.html">Flow D deep-dive</a></div>
   </div></div></section>

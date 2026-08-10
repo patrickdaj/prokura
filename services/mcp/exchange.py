@@ -16,7 +16,7 @@ freshly-DCR'd) MCP client. Tokens are transient and never logged."""
 import httpx
 
 import config
-from telemetry import tracer
+from prokura_telemetry import tracer
 
 _GRANT = "urn:ietf:params:oauth:grant-type:token-exchange"
 _ACCESS = "urn:ietf:params:oauth:token-type:access_token"

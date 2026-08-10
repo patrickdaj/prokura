@@ -19,7 +19,7 @@ import config
 import db
 import fga
 from embedder import embed
-from telemetry import tracer
+from prokura_telemetry import tracer
 
 _log_prefix = "rag_ingest"
 

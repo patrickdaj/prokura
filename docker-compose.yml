@@ -2,7 +2,19 @@
 # Minimum Keycloak: 26.4 (MCP AS support, stored-IdP-token refresh); pinned below.
 name: prokura
 
+# Three tiers, so the file says what Prokura IS vs what merely proves it:
+#   • PROKURA   — the trusted surfaces this project ships: token-broker, approval,
+#                 authority console. (No profile — part of the product.)
+#   • INFRA     — the identity/authz/secrets/telemetry substrate they run on:
+#                 keycloak, openfga, openbao, postgres, ntfy, lgtm. (No profile.)
+#   • TEST/DEMO — toy resource servers that demonstrate the chain but are NOT
+#                 Prokura: mcp, tools-api, rag, mailpit. (profiles: ["demo"].)
+# A bare `docker compose up` brings PROKURA + INFRA (the product). Add the toy
+# resource servers with `docker compose --profile demo up` to run the full chain
+# and the smoke suite. (The `spike` profile carries the M0 CIBA spike, separately.)
+
 services:
+  # ── INFRA ───────────────────────────────────────────────────────────────────
   postgres:
     # pgvector-enabled Postgres (M5): the stock postgres:17-alpine does NOT bundle
     # the `vector` extension (proven by the M5 spike). pgvector/pgvector:pg17 is
@@ -139,6 +151,9 @@ services:
     restart: on-failure
 
   mailpit:
+    # TEST/DEMO tier — the local SMTP sink for the gated email send (Flow C). Only
+    # needed to run the toy resource servers, so it rides the `demo` profile.
+    profiles: ["demo"]
     image: axllent/mailpit:v1.30.6
     ports:
       - "1025:1025" # SMTP sink
@@ -157,25 +172,21 @@ services:
       # provider yaml sits alongside the image's own provider; dashboards JSON elsewhere
       - ./deploy/lgtm/prokura-provider.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/prokura.yaml:ro
       - ./deploy/lgtm/dashboards:/otel-lgtm/prokura-dashboards:ro
+      # Prokura-owned datasource provisioning: pins the Tempo->Loki trace->logs jump
+      # (and the Loki->Tempo derived field) so correlation is repo-controlled, not an
+      # image default that can drift on a bump. Replaces the image's grafana-datasources.yaml.
+      - ./deploy/lgtm/prokura-datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
 
-  # Prokura Console — bespoke headline dashboard (dark, self-contained),
-  # proxying Prometheus/Loki/Tempo through Grafana's datasource API.
-  console:
-    build: ./services/console
-    ports:
-      - "8095:8095"
-    environment:
-      GRAFANA_URL: http://lgtm:3000
-    depends_on:
-      - lgtm
-
+  # ── PROKURA (the trusted surfaces — the product) ────────────────────────────
   # M8: Authority Console — the principal's aggregated authority register. A
   # trusted *surface* with its own OIDC session (authority-ui) that relays the
   # signed-in user's own authority downstream by RFC 8693 exchange (authority-
   # console). It reads FGA/broker/approval and Loki, and drives consent revoke
   # and provider linking — never a tuple-writer. Fire-and-forget telemetry.
   authority:
-    build: ./services/authority
+    build:
+      context: .
+      dockerfile: services/authority/Dockerfile
     ports:
       - "8160:8160"
     environment:
@@ -208,7 +219,9 @@ services:
   # consent, audit). First instrumented Python service; OTLP is fire-and-forget
   # so there is intentionally NO depends_on: lgtm.
   token-broker:
-    build: ./services/token-broker
+    build:
+      context: .
+      dockerfile: services/token-broker/Dockerfile
     ports:
       - "8110:8110"
     environment:
@@ -247,7 +260,9 @@ services:
   # service-held payload and relays the decision to Keycloak's callback. Joins
   # the trusted computing base. Fire-and-forget telemetry (no depends_on: lgtm).
   approval:
-    build: ./services/approval
+    build:
+      context: .
+      dockerfile: services/approval/Dockerfile
     ports:
       - "8120:8120"
     environment:
@@ -276,11 +291,18 @@ services:
       keycloak:
         condition: service_started
 
+  # ── TEST/DEMO (toy resource servers — they prove the chain, they are NOT Prokura)
+  # These + mailpit ride profiles: ["demo"]; `docker compose --profile demo up`
+  # adds them to run the full chain and the smoke suite.
+  #
   # M3: Tools-API — a resource server exposing the gated `email.send` action.
   # Verifies the audience (M1 defense) then hash + single-use via the approval
   # service before sending through the Mailpit sink.
   tools-api:
-    build: ./services/tools-api
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/tools-api/Dockerfile
     ports:
       - "8130:8130"
     environment:
@@ -304,7 +326,10 @@ services:
   # each downstream call and never forwards it. Fire-and-forget telemetry (no
   # depends_on: lgtm).
   mcp:
-    build: ./services/mcp
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/mcp/Dockerfile
     ports:
       - "8140:8140"
     environment:
@@ -333,7 +358,10 @@ services:
   # the Drive-shaped corpus (tuples before queryability) at startup. Fire-and-forget
   # telemetry (no depends_on: lgtm).
   rag:
-    build: ./services/rag
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/rag/Dockerfile
     ports:
       - "8150:8150"
     environment:

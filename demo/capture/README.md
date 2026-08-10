@@ -2,11 +2,10 @@
 
 Scripts that regenerate the **real** assets embedded in the guided walkthroughs
 (`docs/walkthroughs/`). Each drives the *running* stack — nothing is mocked — and
-writes PNGs into `docs/walkthroughs/img/` or prints an HTML `.wf` waterfall
-fragment pasted into the flow pages.
+writes PNGs into `docs/walkthroughs/img/`.
 
 ```bash
-docker compose up -d                       # stack must be running
+docker compose --profile demo up -d        # full chain must be running (toy servers are demo-profiled)
 pip install playwright && playwright install chromium
 
 # Flow A — real login + explicit consent + delegated token
@@ -21,18 +20,22 @@ python demo/capture/capture_approval.py    # -> flowC-approval / -approved / -ma
 # Flow D — alice-vs-bob FGA-filtered retrieval (data, not a screenshot)
 python demo/capture/capture_rag.py         # -> flow_d.result.json
 
-# Any cross-service trace, curated to its meaningful spans, as a native waterfall
-python demo/capture/capture_trace.py <trace_id>          # by id
-python demo/capture/capture_trace.py --find get_provider_token   # auto-pick richest match
-python demo/capture/capture_console.py                   # console overview + a span waterfall (png)
+# Telemetry — REAL Grafana/Tempo/Loki screenshots (the observability surface).
+# Find a flow-tagged trace id first (health-check noise carries no tag):
+#   curl -s 'http://localhost:3001/api/datasources/proxy/uid/tempo/api/search' \
+#     --data-urlencode 'q={ span.prokura.flow = "D" }' -G | python3 -m json.tool
+python demo/capture/capture_grafana.py trace <trace_id> trace-flowD      # Tempo waterfall
+python demo/capture/capture_grafana.py logs <trace_id> trace-logs        # trace->logs (Loki) jump
+python demo/capture/capture_grafana.py dashboard prokura-delegation dashboard-overview
 ```
 
 Notes:
 - `flow_a.py` configures an explicit consent screen for **its own** DCR client only
   (a per-client `default-client-scope` + `consentRequired`), so scripted logins used
   by the other captures and the smoke tests are unaffected.
-- `capture_trace.py` reads Tempo through the console proxy (`/api/tempo/...`) and keeps
-  only the cross-service spans (dropping DB/cache noise). Per-service colors live in
-  `docs/walkthroughs/walkthrough.css` (`.svc-*` / `.bar-*`).
-- The walkthrough pages are static HTML; the trace waterfalls are inlined fragments,
-  so re-running a capture and pasting the new fragment is how you refresh them.
+- `capture_grafana.py` deep-links Grafana **Explore → Tempo/Loki**, collapses noise
+  (query editor + Keycloak's internal subtrees), and clips the panel to a PNG. It
+  replaced the old `capture_trace.py`/`capture_console.py` (which drove the removed
+  `:8095` console) — the observability surface is Grafana now (ADR-0025).
+- The walkthrough pages are static HTML: the telemetry visuals are real screenshots in
+  `docs/walkthroughs/img/`, so re-running a capture and committing the new PNG refreshes them.

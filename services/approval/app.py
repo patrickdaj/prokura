@@ -40,12 +40,14 @@ import config
 import db
 import ntfy
 import validation
-from telemetry import setup_telemetry, tracer
+from prokura_telemetry import (
+    current_span_id, current_trace_id, link_to, record_decision, setup, stamp_flow, tracer,
+)
 from websession import WebSession
 
 HERE = os.path.dirname(__file__)
 app = FastAPI(title="prokura-approval")
-setup_telemetry(app)
+setup(app, config.SERVICE_NAME)
 
 REF_RE = re.compile(r"^apr-[0-9a-f]+$")
 
@@ -98,6 +100,11 @@ async def register(request: Request, authorization: str | None = Header(default=
     # never from any agent-supplied string.
     claims = _verify_bearer(authorization)
     user, agent = claims.get("preferred_username"), claims.get("azp")
+    # Flow C (human approval). Capture THIS (register) span's context and persist it,
+    # so the later ceremony legs — which cross Keycloak and a background task and
+    # can't inherit traceparent — link back here into one navigable flow (§3.4).
+    stamp_flow("C", user=user, agent=agent)
+    origin_trace_id, origin_span_id = current_trace_id(), current_span_id()
     body = await request.json()
     action, params = body.get("action"), body.get("params", {})
     if not action:
@@ -105,7 +112,8 @@ async def register(request: Request, authorization: str | None = Header(default=
     scopes = body.get("scopes", "")
     ref = "apr-" + secrets.token_hex(12)          # binding-message safe (hex only)
     secret = secrets.token_urlsafe(24)
-    db.create(ref, agent, user, action, params, _hash(action, params), scopes, secret)
+    db.create(ref, agent, user, action, params, _hash(action, params), scopes, secret,
+              origin_trace_id=origin_trace_id, origin_span_id=origin_span_id)
     audit.emit("registered", ref=ref, user=user, agent=agent, action=action)
 
     # The approval service initiates the ceremony — its own client, its own
@@ -158,9 +166,13 @@ async def ciba_delegate(request: Request) -> JSONResponse:
     except ValueError:
         raise _Http(400, "invalid_body")
     ref = body.get("binding_message", "")
-    with tracer().start_as_current_span("ciba.delegate") as span:
+    row = db.get(ref) if REF_RE.match(ref or "") else None
+    # Link this delegate leg (a separate inbound request from Keycloak, its own
+    # trace) back to the register span so the ceremony reads as one flow.
+    link = link_to(row["origin_trace_id"], row["origin_span_id"]) if row else None
+    with tracer().start_as_current_span(
+            "ciba.delegate", links=[link] if link else None) as span:
         span.set_attribute("prokura.approval.ref", ref)
-        row = db.get(ref) if REF_RE.match(ref or "") else None
         if row and db.set_delegation(ref, token):
             audit.emit("delegated", ref=ref, user=row["user_id"], agent=row["agent"])
             ntfy.notify(row["user_id"], ref)          # deep link + ref only
@@ -287,19 +299,23 @@ async def decide(ref: str, request: Request, background: BackgroundTasks) -> JSO
     row = db.get(ref)
     if not row or row["user_id"] != sess["preferred_username"]:
         raise _Http(404, "not_found")
+    stamp_flow("C", user=row["user_id"], agent=row["agent"])
+    origin_link = link_to(row["origin_trace_id"], row["origin_span_id"])
     status_now = _effective_status(row)
     if status_now == "expired":
         db.set_status(ref, "expired")
         audit.emit("expired", ref=ref, user=row["user_id"], agent=row["agent"])
         raise _Http(409, "expired")
     if status_now not in ("pending", "delegated"):
+        record_decision("already_decided", deny=True, ref=ref)
         raise _Http(409, "already_decided")
     body = await request.json()
     approve = body.get("decision") == "approve"
     status = "SUCCEED" if approve else "UNAUTHORIZED"
     # The approval service (not the user's device) relays the decision to Keycloak.
     if row.get("delegation_token"):
-        with tracer().start_as_current_span("ciba.callback") as span:
+        with tracer().start_as_current_span(
+                "ciba.callback", links=[origin_link] if origin_link else None) as span:
             span.set_attribute("prokura.approval.decision", status)
             async with httpx.AsyncClient(timeout=10.0) as ac:
                 await ac.post(config.CIBA_CALLBACK, json={"status": status},
@@ -311,36 +327,46 @@ async def decide(ref: str, request: Request, background: BackgroundTasks) -> JSO
     # result. No party consumes this token — the ceremony record is the product.
     if row.get("auth_req_id"):
         background.add_task(_complete_ceremony, ref, row["auth_req_id"],
-                            row["user_id"], row["agent"])
+                            row["user_id"], row["agent"],
+                            row["origin_trace_id"], row["origin_span_id"])
     return JSONResponse({"ref": ref, "status": "approved" if approve else "denied"})
 
 
-def _complete_ceremony(ref: str, auth_req_id: str, user: str, agent: str) -> None:
-    for _ in range(4):
-        try:
-            r = httpx.post(config.TOKEN_URL, data={
-                "grant_type": "urn:openid:params:grant-type:ciba",
-                "auth_req_id": auth_req_id,
-                "client_id": config.CIBA_CLIENT_ID,
-                "client_secret": config.CIBA_CLIENT_SECRET}, timeout=10.0)
-        except httpx.HTTPError as e:
-            audit.emit("ceremony_error", ref=ref, user=user, agent=agent, detail=str(e))
-            return
-        if r.status_code == 200:
-            # Token deliberately discarded (ADR-0022).
-            audit.emit("ceremony_completed", ref=ref, user=user, agent=agent)
-            return
-        err = r.json().get("error", "") if r.headers.get(
-            "content-type", "").startswith("application/json") else r.text[:80]
-        if err == "access_denied":                  # the deny leg completes too
-            audit.emit("ceremony_completed", ref=ref, user=user, agent=agent,
-                       detail="denied")
-            return
-        if err not in ("authorization_pending", "slow_down"):
-            audit.emit("ceremony_error", ref=ref, user=user, agent=agent, detail=err)
-            return
-        time.sleep(5)                               # realm cibaInterval
-    audit.emit("ceremony_error", ref=ref, user=user, agent=agent, detail="poll_timeout")
+def _complete_ceremony(ref: str, auth_req_id: str, user: str, agent: str,
+                       origin_trace_id: str | None = None,
+                       origin_span_id: str | None = None) -> None:
+    # Runs after the response returns — the request span is gone. Open our own span,
+    # linked back to the register origin, and make it current so the poll's httpx
+    # spans nest under it (re-attached context) instead of being orphaned (§3.4).
+    link = link_to(origin_trace_id, origin_span_id)
+    with tracer().start_as_current_span(
+            "ciba.complete", links=[link] if link else None) as span:
+        span.set_attribute("prokura.approval.ref", ref)
+        for _ in range(4):
+            try:
+                r = httpx.post(config.TOKEN_URL, data={
+                    "grant_type": "urn:openid:params:grant-type:ciba",
+                    "auth_req_id": auth_req_id,
+                    "client_id": config.CIBA_CLIENT_ID,
+                    "client_secret": config.CIBA_CLIENT_SECRET}, timeout=10.0)
+            except httpx.HTTPError as e:
+                audit.emit("ceremony_error", ref=ref, user=user, agent=agent, detail=str(e))
+                return
+            if r.status_code == 200:
+                # Token deliberately discarded (ADR-0022).
+                audit.emit("ceremony_completed", ref=ref, user=user, agent=agent)
+                return
+            err = r.json().get("error", "") if r.headers.get(
+                "content-type", "").startswith("application/json") else r.text[:80]
+            if err == "access_denied":              # the deny leg completes too
+                audit.emit("ceremony_completed", ref=ref, user=user, agent=agent,
+                           detail="denied")
+                return
+            if err not in ("authorization_pending", "slow_down"):
+                audit.emit("ceremony_error", ref=ref, user=user, agent=agent, detail=err)
+                return
+            time.sleep(5)                           # realm cibaInterval
+        audit.emit("ceremony_error", ref=ref, user=user, agent=agent, detail="poll_timeout")
 
 
 # --- consumption (unchanged gate: hash + single-use + owner) ------------------

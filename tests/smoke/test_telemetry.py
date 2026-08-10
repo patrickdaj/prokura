@@ -72,6 +72,47 @@ def test_realm_event_reaches_loki(lgtm: str, login_traffic: dict) -> None:
     _poll(check)
 
 
+def test_flow_scoped_trace_is_findable(lgtm: str, login_traffic: dict) -> None:
+    """Observability spec — 'Find one flow end-to-end by its tag'. A driven login+
+    exchange is discoverable by its flow tag, and health-check noise (no tag) is
+    excluded. (login_traffic drives an exchange, which stamps the authority-console
+    / delegation surfaces; any Prokura flow tag proves the mechanism.)"""
+    def check():
+        r = httpx.get(
+            f"{lgtm}/api/datasources/proxy/uid/tempo/api/search",
+            params={"q": '{ span.prokura.flow != "" }', "limit": 20},
+            timeout=10.0,
+        )
+        traces = r.json().get("traces", []) if r.status_code == 200 else []
+        return bool(traces), f"{len(traces)} flow-tagged traces (HTTP {r.status_code})"
+
+    _poll(check)
+
+
+def test_denied_leg_is_red_and_flow_tagged(lgtm: str, keycloak: str, broker: str) -> None:
+    """Observability spec — 'A denied step is visibly red'. A brokering request for a
+    provider with no grant is refused AFTER the root span is flow-tagged, so it lands
+    as an error-status span carrying prokura.flow="B" and the deny decision."""
+    import brokerkit
+    from conftest import BROKER_URL
+
+    # Drive the denial: valid broker-audience token, provider with no grant.
+    httpx.post(f"{BROKER_URL}/v1/tokens/nonexistent-provider",
+               headers={"Authorization": f"Bearer {brokerkit.broker_token()}"},
+               json={}, timeout=15.0)
+
+    def check():
+        r = httpx.get(
+            f"{lgtm}/api/datasources/proxy/uid/tempo/api/search",
+            params={"q": '{ span.prokura.flow = "B" && status = error }', "limit": 10},
+            timeout=10.0,
+        )
+        traces = r.json().get("traces", []) if r.status_code == 200 else []
+        return bool(traces), f"{len(traces)} red flow-B traces (HTTP {r.status_code})"
+
+    _poll(check)
+
+
 def test_dashboard_provisioned(lgtm: str) -> None:
     r = httpx.get(f"{lgtm}/api/dashboards/uid/prokura-delegation", timeout=10.0)
     assert r.status_code == 200, "delegation-chain dashboard not provisioned"

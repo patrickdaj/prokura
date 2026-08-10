@@ -10,7 +10,7 @@ import httpx
 import config
 import db
 import providers
-from telemetry import tracer
+from prokura_telemetry import tracer
 
 _bao = hvac.Client(url=config.OPENBAO_URL, token=config.OPENBAO_TOKEN)
 _MOUNT = "secret"

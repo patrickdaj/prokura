@@ -15,7 +15,7 @@
    }
   ]
  },
- "description": "Prokura identity stack \u2014 power-user drill-down. The bespoke console (:8095) is the headline view; use this for ad-hoc metric/log exploration and Explore for trace waterfalls. Panels grow as milestones add services (M2 broker, M3 approval).",
+ "description": "Prokura identity stack \u2014 the delegation-chain overview. This dashboard is the at-a-glance surface; use Explore \u2192 Tempo for flow trace waterfalls (search by prokura.flow) and the Tempo\u2192Loki derived field for the trace\u2192logs jump. Panels grow as milestones add services (M2 broker, M3 approval).",
  "editable": true,
  "fiscalYearStartMonth": 0,
  "graphTooltip": 0,
@@ -795,6 +795,21 @@
      "expr": "sum(increase(prokura_revocation_stop_ms_milliseconds_sum[1h])) / clamp_min(sum(increase(prokura_revocation_stop_ms_milliseconds_count[1h])), 1)"
     }
    ]
+  },
+  {
+   "id": 19,
+   "type": "text",
+   "title": "Flow-scoped traces \u2014 open one end-to-end in Explore \u2192 Tempo",
+   "gridPos": {
+    "h": 7,
+    "w": 24,
+    "x": 0,
+    "y": 78
+   },
+   "options": {
+    "mode": "markdown",
+    "content": "**Find any flow end-to-end.** Every flow's root span carries `prokura.flow`; health-check noise carries no tag and is excluded. Open the flow in **Explore \u2192 Tempo** (the waterfall renders red where denied, with the domain decisions as span events), then use the **Tempo\u2192Loki** derived field on any span to jump to its correlated audit lines:\n\n- [Flow A / B \u2014 token brokering & delegation](/explore?schemaVersion=1&panes=%7B%22t%22%3A+%7B%22datasource%22%3A+%22tempo%22%2C+%22queries%22%3A+%5B%7B%22refId%22%3A+%22A%22%2C+%22datasource%22%3A+%7B%22type%22%3A+%22tempo%22%2C+%22uid%22%3A+%22tempo%22%7D%2C+%22query%22%3A+%22%7B+span.prokura.flow+%3D+%5C%22B%5C%22+%7D%22%2C+%22queryType%22%3A+%22traceql%22%7D%5D%2C+%22range%22%3A+%7B%22from%22%3A+%22now-3h%22%2C+%22to%22%3A+%22now%22%7D%7D%7D&orgId=1)\n- [Flow C \u2014 human approval (CIBA)](/explore?schemaVersion=1&panes=%7B%22t%22%3A+%7B%22datasource%22%3A+%22tempo%22%2C+%22queries%22%3A+%5B%7B%22refId%22%3A+%22A%22%2C+%22datasource%22%3A+%7B%22type%22%3A+%22tempo%22%2C+%22uid%22%3A+%22tempo%22%7D%2C+%22query%22%3A+%22%7B+span.prokura.flow+%3D+%5C%22C%5C%22+%7D%22%2C+%22queryType%22%3A+%22traceql%22%7D%5D%2C+%22range%22%3A+%7B%22from%22%3A+%22now-3h%22%2C+%22to%22%3A+%22now%22%7D%7D%7D&orgId=1)\n- [Flow D \u2014 FGA-filtered RAG](/explore?schemaVersion=1&panes=%7B%22t%22%3A+%7B%22datasource%22%3A+%22tempo%22%2C+%22queries%22%3A+%5B%7B%22refId%22%3A+%22A%22%2C+%22datasource%22%3A+%7B%22type%22%3A+%22tempo%22%2C+%22uid%22%3A+%22tempo%22%7D%2C+%22query%22%3A+%22%7B+span.prokura.flow+%3D+%5C%22D%5C%22+%7D%22%2C+%22queryType%22%3A+%22traceql%22%7D%5D%2C+%22range%22%3A+%7B%22from%22%3A+%22now-3h%22%2C+%22to%22%3A+%22now%22%7D%7D%7D&orgId=1)\n- [Authority console \u2014 the principal's surface](/explore?schemaVersion=1&panes=%7B%22t%22%3A+%7B%22datasource%22%3A+%22tempo%22%2C+%22queries%22%3A+%5B%7B%22refId%22%3A+%22A%22%2C+%22datasource%22%3A+%7B%22type%22%3A+%22tempo%22%2C+%22uid%22%3A+%22tempo%22%7D%2C+%22query%22%3A+%22%7B+span.prokura.flow+%3D+%5C%22authority-console%5C%22+%7D%22%2C+%22queryType%22%3A+%22traceql%22%7D%5D%2C+%22range%22%3A+%7B%22from%22%3A+%22now-3h%22%2C+%22to%22%3A+%22now%22%7D%7D%7D&orgId=1)"
+   }
   }
  ]
 }

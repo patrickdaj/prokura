@@ -76,20 +76,8 @@
     <p>Pulled live from the Tempo API: <code>rag_search</code> decomposed. The vector search
       (<code>pgvector.top_k</code>) finds candidates; then <code>fga.batch_check</code> authorizes them
       <b>as the querying user</b> against OpenFGA — the retriever never evaluates as the agent.</p>
-    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8095 — rag_search, decomposed</span></div>
-      <div class="body">
-<div class="wf wide">
-<div class="legend"><span><i class="bar-fga"></i>openfga</span><span><i class="bar-kc"></i>keycloak</span><span><i class="bar-mcp"></i>mcp</span><span><i class="bar-rag"></i>rag</span><span style="margin-left:auto">trace 5eb85df513035d10… · 8 key spans · 73 ms end-to-end</span></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>POST /mcp</div><div class="track"><div class="bar bar-mcp" style="left:0.0%;width:100.0%"></div></div><div class="d">73.2</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>tool.rag_search</div><div class="track"><div class="bar bar-mcp" style="left:2.5%;width:94.3%"></div></div><div class="d">69.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>keycloak.mcp_exchange</div><div class="track"><div class="bar bar-mcp" style="left:2.6%;width:16.5%"></div></div><div class="d">12.1</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:9.0%;width:6.0%"></div></div><div class="d">4.4</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-rag">rag</span>POST /rag/search</div><div class="track"><div class="bar bar-rag" style="left:32.0%;width:63.2%"></div></div><div class="d">46.3</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-rag">rag</span>pgvector.top_k (embedding search)</div><div class="track"><div class="bar bar-rag" style="left:33.5%;width:9.3%"></div></div><div class="d">6.8</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-rag">rag</span>fga.batch_check (filter as user)</div><div class="track"><div class="bar bar-rag" style="left:56.0%;width:26.1%"></div></div><div class="d">19.1</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-fga">openfga</span>BatchCheck (authz)</div><div class="track"><div class="bar bar-fga" style="left:64.0%;width:1.0%"></div></div><div class="d">0.7</div></div>
-</div>
-      </div>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo · { prokura.flow = "D" }</span></div>
+      <div class="body"><a href="img/trace-flowD.png" target="_blank" rel="noopener"><img src="img/trace-flowD.png" alt="Real Grafana/Tempo waterfall for a Flow D trace: mcp POST /mcp → tool.rag_search → keycloak.mcp_exchange → rag POST /rag/search → rag.search → pgvector.top_k → fga.batch_check → openfga, 87 spans across 4 services"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> the authorization is on the retrieval path, evaluated as the user — visible in telemetry, not asserted.</div>
   </div></div></section>

@@ -16,7 +16,7 @@ import uuid
 import httpx
 
 import config
-from telemetry import tracer
+from prokura_telemetry import tracer
 
 _store_id: str | None = None
 

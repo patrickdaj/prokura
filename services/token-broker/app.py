@@ -12,7 +12,7 @@ Endpoints:
   POST /v1/consent/revoke             M9: revoke = kill switch (tuple + deny-list + KC + signal)
   GET  /ssf/stream                    M9: CAEP/SSF revocation Security Event Tokens (poll)
 
-Born instrumented: traceparent join key + prokura.correlation_id, realtime audit.
+Born instrumented: traceparent join key + native trace context, realtime audit.
 """
 
 import os
@@ -31,12 +31,12 @@ import grants
 import revocation
 import signals
 import validation
-from telemetry import setup_telemetry
+from prokura_telemetry import setup, stamp_flow
 from websession import WebSession
 
 HERE = os.path.dirname(__file__)
 app = FastAPI(title="prokura-token-broker")
-setup_telemetry(app)
+setup(app, config.SERVICE_NAME)
 
 # M7 (D2): the consent surface has its own OIDC session — the owner identity for
 # every consent write comes from this session, never from a URL-carried token.
@@ -104,6 +104,9 @@ async def issue_token(provider: str, request: Request,
 
     user = claims.get("preferred_username")
     agent = claims.get("azp")
+    # Flow B (token brokering): tag the root span so `{ prokura.flow = "B" }` in Tempo
+    # lands on this end-to-end hand-out — red at whichever step denies it below.
+    stamp_flow("B", user=user, agent=agent, provider=provider)
     body = {}
     try:
         body = await request.json()

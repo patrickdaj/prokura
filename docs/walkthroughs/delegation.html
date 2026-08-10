@@ -90,23 +90,8 @@
       agent's <code>mcp_exchange</code> mints a single-audience token at Keycloak, the broker runs an
       <code>fga.check</code> before it hands anything back, reads the grant from OpenBao, re-issues at the
       provider, and rotates the secret — 104&nbsp;ms, end to end, nothing off-book.</p>
-    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8095 — one delegated action, decomposed</span></div>
-      <div class="body">
-<div class="wf wide">
-<div class="legend"><span><i class="bar-bao"></i>openbao</span><span><i class="bar-broker"></i>broker</span><span><i class="bar-fga"></i>openfga</span><span><i class="bar-kc"></i>keycloak</span><span><i class="bar-mcp"></i>mcp</span><span style="margin-left:auto">trace 9a8d375e4ff8f269… · 11 key spans · 104 ms end-to-end</span></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>POST /mcp</div><div class="track"><div class="bar bar-mcp" style="left:0.0%;width:100.0%"></div></div><div class="d">104.4</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>tool.get_provider_token</div><div class="track"><div class="bar bar-mcp" style="left:0.4%;width:99.1%"></div></div><div class="d">103.5</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>keycloak.mcp_exchange</div><div class="track"><div class="bar bar-mcp" style="left:0.5%;width:27.6%"></div></div><div class="d">28.8</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:16.3%;width:11.5%"></div></div><div class="d">12.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>POST /v1/tokens</div><div class="track"><div class="bar bar-broker" style="left:32.2%;width:67.1%"></div></div><div class="d">70.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>fga.check</div><div class="track"><div class="bar bar-broker" style="left:36.3%;width:5.6%"></div></div><div class="d">5.9</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-fga">openfga</span>Check (authz)</div><div class="track"><div class="bar bar-fga" style="left:40.2%;width:1.4%"></div></div><div class="d">1.5</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-bao">openbao</span>openbao.read_grant</div><div class="track"><div class="bar bar-bao" style="left:42.0%;width:1.0%"></div></div><div class="d">1.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>provider.refresh</div><div class="track"><div class="bar bar-broker" style="left:43.0%;width:49.8%"></div></div><div class="d">52.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:48.2%;width:44.5%"></div></div><div class="d">46.4</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-bao">openbao</span>openbao.rotate_grant</div><div class="track"><div class="bar bar-bao" style="left:93.0%;width:1.7%"></div></div><div class="d">1.8</div></div>
-</div>
-      </div>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo · one delegated action</span></div>
+      <div class="body"><a href="img/trace-flowB.png" target="_blank" rel="noopener"><img src="img/trace-flowB.png" alt="Real Grafana/Tempo waterfall for one delegated action: mcp POST /mcp → tool.get_provider_token → keycloak.mcp_exchange (the RFC 8693 exchange) → token-broker POST /v1/tokens/{provider} → fga.check → openfga"></a></div>
     </div>
     <div class="cap"><b>What it proves:</b> the whole delegated action is one correlated trace — the authz check and secret access happen <i>inside</i> the flow, reconstructable from telemetry alone. <a href="brokering.html">The broker/secret detail is Flow B →</a></div>
   </div></div></section>

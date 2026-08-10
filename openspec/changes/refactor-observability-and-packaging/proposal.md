@@ -49,6 +49,21 @@ the real thing, everywhere it can be shown, without squishing on mobile.
   for genuine CLI/API text (their natural form). Wide content scrolls inside its own container
   so **nothing squishes on mobile**. Re-audit every walkthrough for glossed-over steps — if we
   do something and it can be shown, show it.
+- **Surface OpenBao and the authority console in the main guided walkthrough.** The main tour
+  (`docs/walkthroughs/index.html`) is the headline page everyone lands on, yet it glosses two
+  things it currently only *asserts in text* — where the durable credential lives, and the
+  principal's own view of who acts for them. Add, inline in the guided tour: (1) a **real
+  OpenBao UI screenshot** at the moment the vault is used (`secret/grants/alice/acme`, values
+  masked), so "the refresh credential never leaves OpenBao" is *shown*, not just claimed — these
+  visuals exist today only in the `brokering.html`/`claude-code.html` deep-dives; and (2) a
+  **dedicated guided-tour beat for the authority console** — the principal's own "my agents"
+  register (who acts for you, each agent's consented grants, revoke in one click), shown with a
+  **real screenshot** as a first-class stage in the narrative, not a bottom-of-page flowcard
+  link. The six current stages are all the *agent's* happy path; the authority console is the
+  *human's control surface* and is a core Prokura trusted surface (this change's own positioning:
+  Prokura = the trusted surfaces), so the showcase page must actually **show what the product
+  does for the principal**, not defer it to a sub-page. Both reuse existing surfaces (no new
+  feature) and follow the same real-screenshot, mobile-safe rules.
 
 ## Capabilities
 
@@ -76,6 +91,8 @@ the real thing, everywhere it can be shown, without squishing on mobile.
   driven flow produces a `prokura.flow`-tagged trace with a red span on a denied leg, and that
   a bare `docker compose config` (no profile) excludes the toy resource servers.
 - Docs: walkthrough visual rework (real screenshots incl. telemetry, mobile-safe, no glossing);
+  the main guided walkthrough (`index.html`) additionally shows the **OpenBao UI** (vault-use
+  moment, masked) and the **authority console** ("my agents") inline, not just as text/links;
   architecture positioning note — **Prokura = the trusted surfaces; mcp/tools-api/rag are
   example resource servers that demonstrate it**; blog spot-check (likely fine) for mobile squish.
 - Not a milestone; a cleanliness/clarity change. New ADR: decommission the bespoke console in

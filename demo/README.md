@@ -7,8 +7,8 @@ tools — and then drives the whole story, printing each step and the real value
 happen.
 
 ```bash
-docker compose up -d          # bring the stack up
-python demo/run_demo.py        # watch a real MCP client drive the chain
+docker compose --profile demo up -d   # full chain (the toy resource servers are demo-profiled)
+python demo/run_demo.py               # watch a real MCP client drive the chain
 ```
 
 Four acts:
@@ -21,8 +21,8 @@ Four acts:
 4. **FGA-filtered RAG** — alice retrieves a protected doc; bob provably cannot, even
    though it is his **top embedding hit**.
 
-Then watch the same flow as one linked trace in the console
-(`http://localhost:8095`), or step through it in the
+Then watch the same flow as one trace in Grafana (`http://localhost:3001` →
+Explore → Tempo, search `{ prokura.flow = "D" }`), or step through it in the
 [walkthroughs](../docs/walkthroughs/index.html).
 
 It reuses the exact client machinery the smoke tests use (`tests/smoke/`), so the demo

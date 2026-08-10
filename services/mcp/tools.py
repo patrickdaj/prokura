@@ -12,7 +12,7 @@ import httpx
 import audit
 import config
 from exchange import ExchangeError, exchange_for
-from telemetry import tracer
+from prokura_telemetry import stamp_flow, tracer
 
 
 class ToolError(Exception):
@@ -85,6 +85,7 @@ def get_provider_token(inbound_token: str, claims: dict, args: dict) -> dict:
     user = claims.get("preferred_username")
     with tracer().start_as_current_span("tool.get_provider_token") as span:
         span.set_attribute("prokura.provider", provider)
+        stamp_flow("B", user=user, agent=config.MCP_CLIENT_ID, provider=provider)
         try:
             broker_token = exchange_for(inbound_token, config.BROKER_AUDIENCE)
         except ExchangeError as e:
@@ -116,6 +117,7 @@ def send_email(inbound_token: str, claims: dict, args: dict) -> dict:
 
     with tracer().start_as_current_span("tool.send_email") as span:
         span.set_attribute("prokura.action", "email.send")
+        stamp_flow("C", user=user, agent=config.MCP_CLIENT_ID)
         try:
             tools_token = exchange_for(inbound_token, config.TOOLS_AUDIENCE)
         except ExchangeError as e:
@@ -167,6 +169,7 @@ def rag_search(inbound_token: str, claims: dict, args: dict) -> dict:
         body["top_k"] = args["top_k"]
     with tracer().start_as_current_span("tool.rag_search") as span:
         span.set_attribute("prokura.rag.query_len", len(query))
+        stamp_flow("D", user=user, agent=config.MCP_CLIENT_ID)
         try:
             rag_token = exchange_for(inbound_token, config.RAG_AUDIENCE)
         except ExchangeError as e:

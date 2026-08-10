@@ -6,7 +6,7 @@ so the trail is Loki-queryable within seconds and joinable to the flow's trace
 import logging
 
 import db
-from telemetry import current_traceparent
+from prokura_telemetry import current_trace_id, is_denial, record_decision
 
 _log = logging.getLogger("prokura.audit")
 
@@ -21,23 +21,21 @@ def emit(
     ttl: int | None = None,
     detail: str | None = None,
 ) -> str:
-    """Record an audit event; returns the correlation id (the active trace id)."""
-    correlation_id = current_traceparent() or "no-trace"
+    """Record an audit event; returns the active trace id (persisted as the row's
+    join key). Trace↔log correlation is the native trace context, not a copied id."""
+    trace_id = current_trace_id() or "no-trace"
     db.insert_audit(
-        correlation_id=correlation_id, user_id=user, agent=agent, provider=provider,
+        correlation_id=trace_id, user_id=user, agent=agent, provider=provider,
         scopes=scopes, ttl=ttl, decision=decision, detail=detail,
     )
-    # Realtime emit — the correlation id (= trace id) is in the line text so it is
-    # Loki-queryable and joins to the persisted row AND the flow trace. Trace
-    # context is also attached automatically by the OTel logging handler.
+    # Realtime emit — the native trace_id/span_id is attached to the record by the
+    # OTel logging handler and is the Tempo→Loki join key (derived field), so the
+    # line needs no hand-copied correlation id.
     _log.info(
-        "broker_audit correlation_id=%s decision=%s user=%s agent=%s "
-        "provider=%s scopes=%s ttl=%s detail=%s",
-        correlation_id, decision, user, agent, provider, scopes, ttl, detail,
-        extra={
-            "prokura.correlation_id": correlation_id,
-            "prokura.decision": decision,
-            "prokura.provider": provider,
-        },
+        "broker_audit decision=%s user=%s agent=%s provider=%s scopes=%s ttl=%s detail=%s",
+        decision, user, agent, provider, scopes, ttl, detail,
+        extra={"prokura.decision": decision, "prokura.provider": provider},
     )
-    return correlation_id
+    # Narrate the trace: the same decision as a span event, red on a deny path.
+    record_decision(decision, deny=is_denial(decision), provider=provider)
+    return trace_id

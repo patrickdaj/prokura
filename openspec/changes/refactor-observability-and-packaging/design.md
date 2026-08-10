@@ -115,6 +115,31 @@ element; wide content lives in an `overflow-x:auto` container (extend `walkthrou
 block still squishes) and images are `max-width:100%`. Completeness: walk each page step-by-step
 and, for any claim that has a visual, ensure the visual is present and real — fill the gaps.
 
+Two named gaps in the **main guided walkthrough** (`index.html`) — the headline page everyone
+lands on — that this change closes as part of the completeness pass:
+
+- **OpenBao, shown when it's used.** Today the main tour only *asserts* "no refresh_token — it
+  never leaves OpenBao" (index.html ~L84) with no visual; the OpenBao UI screenshot lives only
+  in `brokering.html`/`claude-code.html`. Add a **real OpenBao UI screenshot**
+  (`localhost:8200 → secret/grants/alice/acme`, values vault-masked) at ACT 2 (the brokered
+  provider token), so the durable credential is *seen* sitting in the vault, not just claimed.
+  Reuse/regenerate the existing `img/flowB-openbao.png` style; drive it live for a current shot.
+- **The authority console, as a guided-tour beat.** The main tour's six stages (01 discover →
+  06 one trace) are entirely the *agent's* happy path; the console appears only as a bottom
+  flowcard (index.html ~L174). The authority console is the *principal's control surface* and a
+  core Prokura trusted surface — the showcase page must **show what the product does for the
+  human**. Add a **dedicated stage** (a new numbered beat after the trace act, e.g. "07 — the
+  human stays in control", or woven in as the closing coda before the flowcard grid) that shows
+  the "my agents" register with a **real screenshot** (agents + consented grants + revoke — the
+  same live-captured surface `authority.html` already uses, e.g. `img/authority-register.png`)
+  and one or two sentences on the payoff: see who acts for you, revoke in one click, no new
+  authority (it relays your own by token exchange). Not a bolted-on image — a narrative beat that
+  lands the "you're still in control" story on the page everyone reads.
+
+Both are **docs-only** (real screenshots of surfaces that already exist — OpenBao's own UI and
+the shipped authority console); no console feature is added. They follow the same real-screenshot
+and mobile-safe rules as the rest of §7.
+
 ## Risks / Trade-offs
 
 - [Shared build context enlarges each image's context] → a `.dockerignore` (exclude
@@ -147,6 +172,12 @@ the final version**, specifically: replace the "faithful recreation of each scre
 and remove "open the console" / any `:8095` reference (console decom, task 5.2), and confirm
 the walkthrough/telemetry links still point at the real-screenshot pages (task 7.x). Re-check
 its mobile layout after merge (task 7.3). Held pending that agent's completion.
+
+The main **guided walkthrough** page `docs/walkthroughs/index.html` (distinct from the site
+landing `docs/index.html`) also gets new inline visuals (tasks 7.5–7.6: the OpenBao UI shot and
+the authority-console shot). If that agent's work also reaches `docs/walkthroughs/index.html`,
+apply 7.5–7.6 **on top of** its final version too; otherwise these edits proceed with the rest
+of §7.
 
 ## Open Questions
 

@@ -10,7 +10,7 @@ import psycopg
 
 import config
 from embedder import DIM, to_pgvector
-from telemetry import tracer
+from prokura_telemetry import tracer
 
 _DDL = f"""
 CREATE EXTENSION IF NOT EXISTS vector;

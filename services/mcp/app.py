@@ -12,7 +12,7 @@ Two hats:
 The inbound MCP token is never forwarded downstream; each tool exchanges it
 (RFC 8693) for a correctly-audienced token first (see tools.py / exchange.py).
 
-Born instrumented: traceparent join key + prokura.correlation_id, realtime audit.
+Born instrumented: traceparent join key + native trace context, realtime audit.
 """
 
 from fastapi import FastAPI, Header, Request
@@ -21,10 +21,10 @@ from fastapi.responses import JSONResponse
 import config
 import tools
 import validation
-from telemetry import setup_telemetry
+from prokura_telemetry import record_decision, setup
 
 app = FastAPI(title="prokura-mcp")
-setup_telemetry(app)
+setup(app, config.SERVICE_NAME)
 
 _METADATA_URL = f"{config.MCP_PUBLIC_URL}/.well-known/oauth-protected-resource"
 _WWW_AUTH = f'Bearer resource_metadata="{_METADATA_URL}"'
@@ -73,13 +73,16 @@ async def mcp_endpoint(request: Request,
     # Transport-level auth (MCP 2025-06-18): an unauthenticated or wrong-audience
     # request gets a 401 pointing at the resource metadata — never a tool action.
     if not authorization or not authorization.lower().startswith("bearer "):
+        record_decision("denied_challenge", deny=True)
         return _challenge()
     token = authorization.split(" ", 1)[1]
     try:
         claims = validation.verify_bearer(token)
     except (validation.TokenInvalid, validation.WrongAudience):
+        record_decision("denied_challenge", deny=True)
         return _challenge()
     except validation.InsufficientScope:
+        record_decision("denied_insufficient_scope", deny=True)
         return _insufficient_scope()
 
     try:

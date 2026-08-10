@@ -26,10 +26,10 @@ from fastapi.responses import JSONResponse
 
 import config
 import validation
-from telemetry import setup_telemetry, tracer
+from prokura_telemetry import setup, tracer
 
 app = FastAPI(title="prokura-tools-api")
-setup_telemetry(app)
+setup(app, config.SERVICE_NAME)
 
 
 class _Http(Exception):

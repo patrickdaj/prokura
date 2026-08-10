@@ -7,21 +7,20 @@ share the same traceparent."""
 
 import logging
 
-from telemetry import current_traceparent
+from prokura_telemetry import current_trace_id, is_denial, record_decision
 
 _log = logging.getLogger("prokura.audit")
 
 
 def emit(*, decision: str, user: str | None = None, agent: str | None = None,
          tool: str | None = None, detail: str | None = None) -> str:
-    correlation_id = current_traceparent() or "no-trace"
+    trace_id = current_trace_id() or "no-trace"
+    # Native trace context joins the line to its trace (Tempo→Loki derived field);
+    # no hand-copied correlation id in the text.
     _log.info(
-        "mcp_audit correlation_id=%s decision=%s user=%s agent=%s tool=%s detail=%s",
-        correlation_id, decision, user, agent, tool, detail,
-        extra={
-            "prokura.correlation_id": correlation_id,
-            "prokura.decision": decision,
-            "prokura.tool": tool,
-        },
+        "mcp_audit decision=%s user=%s agent=%s tool=%s detail=%s",
+        decision, user, agent, tool, detail,
+        extra={"prokura.decision": decision, "prokura.tool": tool},
     )
-    return correlation_id
+    record_decision(decision, deny=is_denial(decision), tool=tool)
+    return trace_id

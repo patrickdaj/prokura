@@ -22,8 +22,8 @@ import config
 import consent
 import db
 import signals
-import telemetry
-from telemetry import current_traceparent, tracer
+import prokura_telemetry as telemetry
+from prokura_telemetry import current_trace_id, tracer
 
 _broker_admin_token: tuple[float, str] | None = None
 
@@ -98,7 +98,7 @@ def kill(agent: str, user: str, provider: str, *, azp: str) -> dict:
         stop_ms = int((time.monotonic() - t0) * 1000)
         span.set_attribute("prokura.revocation.stop_ms", stop_ms)
         telemetry.record_stop_ms(stop_ms, agent=agent)
-        correlation_id = current_traceparent() or "no-trace"
+        correlation_id = current_trace_id() or "no-trace"
         signals.emit_revocation(agent=agent, user=user, provider=provider,
                                 correlation_id=correlation_id)
     return {"stop_ms": stop_ms, "residual_seconds": config.MAX_TTL_SECONDS}
@@ -120,7 +120,7 @@ def kill_agent(agent: str, user: str, *, azp: str) -> dict:
         stop_ms = int((time.monotonic() - t0) * 1000)
         span.set_attribute("prokura.revocation.stop_ms", stop_ms)
         telemetry.record_stop_ms(stop_ms, agent=agent)
-        correlation_id = current_traceparent() or "no-trace"
+        correlation_id = current_trace_id() or "no-trace"
         signals.emit_revocation(agent=agent, user=user, provider="*",
                                 correlation_id=correlation_id)
     return {"stop_ms": stop_ms, "residual_seconds": config.MAX_TTL_SECONDS, "keycloak": kc}

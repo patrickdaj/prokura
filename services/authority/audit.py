@@ -6,16 +6,19 @@ downstream broker/approval records it triggers)."""
 
 import logging
 
-from telemetry import current_traceparent
+from prokura_telemetry import current_trace_id, is_denial, record_decision
 
 _log = logging.getLogger("prokura.audit")
 
 
 def emit(event: str, *, user=None, agent=None, provider=None, detail=None) -> str:
-    correlation_id = current_traceparent() or "no-trace"
+    trace_id = current_trace_id() or "no-trace"
+    # Native trace context joins the line to its trace (Tempo→Loki derived field);
+    # no hand-copied correlation id in the text.
     _log.info(
-        "authority_audit correlation_id=%s event=%s user=%s agent=%s provider=%s detail=%s",
-        correlation_id, event, user, agent, provider, detail,
-        extra={"prokura.correlation_id": correlation_id, "prokura.event": event},
+        "authority_audit event=%s user=%s agent=%s provider=%s detail=%s",
+        event, user, agent, provider, detail,
+        extra={"prokura.event": event},
     )
-    return correlation_id
+    record_decision(event, deny=is_denial(event), provider=provider)
+    return trace_id

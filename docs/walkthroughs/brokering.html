@@ -57,28 +57,14 @@
 
   <section><div class="stage"><div class="idx">04</div><div>
     <h3>Inside the broker — authorize, read, refresh, rotate</h3>
-    <p>Pulled live from the Tempo API: the broker's slice of one delegated action. Before it returns
-      anything it runs an <code>fga.check</code> (→ OpenFGA), reads the grant from OpenBao, refreshes at
-      the provider, and rotates the stored secret — the whole custody chain, in one trace.</p>
-    <div class="screen app"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8095 — broker span slice</span></div>
-      <div class="body">
-<div class="wf wide">
-<div class="legend"><span><i class="bar-bao"></i>openbao</span><span><i class="bar-broker"></i>broker</span><span><i class="bar-fga"></i>openfga</span><span><i class="bar-kc"></i>keycloak</span><span><i class="bar-mcp"></i>mcp</span><span style="margin-left:auto">trace 9a8d375e4ff8f269… · 11 key spans · 104 ms end-to-end</span></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>POST /mcp</div><div class="track"><div class="bar bar-mcp" style="left:0.0%;width:100.0%"></div></div><div class="d">104.4</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>tool.get_provider_token</div><div class="track"><div class="bar bar-mcp" style="left:0.4%;width:99.1%"></div></div><div class="d">103.5</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-mcp">mcp</span>keycloak.mcp_exchange</div><div class="track"><div class="bar bar-mcp" style="left:0.5%;width:27.6%"></div></div><div class="d">28.8</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:16.3%;width:11.5%"></div></div><div class="d">12.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>POST /v1/tokens</div><div class="track"><div class="bar bar-broker" style="left:32.2%;width:67.1%"></div></div><div class="d">70.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>fga.check</div><div class="track"><div class="bar bar-broker" style="left:36.3%;width:5.6%"></div></div><div class="d">5.9</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-fga">openfga</span>Check (authz)</div><div class="track"><div class="bar bar-fga" style="left:40.2%;width:1.4%"></div></div><div class="d">1.5</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-bao">openbao</span>openbao.read_grant</div><div class="track"><div class="bar bar-bao" style="left:42.0%;width:1.0%"></div></div><div class="d">1.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-broker">broker</span>provider.refresh</div><div class="track"><div class="bar bar-broker" style="left:43.0%;width:49.8%"></div></div><div class="d">52.0</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-kc">keycloak</span>token endpoint</div><div class="track"><div class="bar bar-kc" style="left:48.2%;width:44.5%"></div></div><div class="d">46.4</div></div>
-<div class="sp"><div class="nm"><span class="svc svc-bao">openbao</span>openbao.rotate_grant</div><div class="track"><div class="bar bar-bao" style="left:93.0%;width:1.7%"></div></div><div class="d">1.8</div></div>
-</div>
-      </div>
+    <p>A real Grafana/Tempo trace — the broker's slice of one delegated action, flow-tagged
+      <code>prokura.flow = "B"</code>. The agent's <code>get_provider_token</code> tool exchanges its token,
+      then <code>token-broker POST /v1/tokens/{provider}</code> runs <code>fga.check</code> (→ OpenFGA),
+      reads the grant from OpenBao, and refreshes at the provider — the whole custody chain, in one trace.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — Grafana · Explore → Tempo · { prokura.flow = "B" }</span></div>
+      <div class="body"><a href="img/trace-flowB.png" target="_blank" rel="noopener"><img src="img/trace-flowB.png" alt="Real Grafana/Tempo waterfall for a Flow B trace: mcp POST /mcp → tool.get_provider_token → keycloak.mcp_exchange → token-broker POST /v1/tokens/{provider} → fga.check → openfga, 67 spans across 4 services"></a></div>
     </div>
-    <div class="cap"><b>What it proves:</b> authorization and secret custody happen server-side, inside the trace — the agent's request drives them but never touches them.</div>
+    <div class="cap"><b>What it proves:</b> authorization and secret custody happen server-side, inside the trace — the agent's request drives them but never touches them. Search <code>{ prokura.flow = "B" }</code> in Tempo to open it yourself.</div>
   </div></div></section>
 
   <section>

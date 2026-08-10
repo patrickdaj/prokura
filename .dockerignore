@@ -1,0 +1,24 @@
+# Repo-root build context (services build from `.` so they can pip install
+# sdk/prokura-telemetry). Keep the context lean — exclude everything a service
+# image never needs so builds stay fast.
+.git
+.gitignore
+docs
+tests
+spike
+openspec
+notes
+*.md
+**/README.md
+**/__pycache__
+**/*.pyc
+.venv
+**/.venv
+.env
+**/.env
+node_modules
+**/node_modules
+# other services' local state / data dirs (each service copies only its own tree)
+**/data
+**/*.sqlite
+**/*.db

@@ -40,16 +40,28 @@ docs, ADRs, threat model, and demo *are* the product. The compose stack is expli
 | Tools-API | Python/FastAPI | 8130 | Gated `email.send`; reactive step-up; hash-verify + single-use before acting |
 | MCP server | Python/FastAPI | 8140 | OAuth 2.1 resource server + minimal MCP server; drives the chain through tools |
 | RAG retriever | Python/FastAPI | 8150 | FGA-filtered retrieval, authorized **as the end user**; pgvector store |
-| Console | Python/FastAPI | 8095 | Bespoke observability page (trace → span → correlated Loki logs) |
 | OpenFGA | OpenFGA | 8081 | Per-agent consent (`can_use`) + document authorization (`viewer`) |
 | OpenBao | OpenBao (dev) | 8200 | The only store of long-lived provider credentials; broker-scoped policy |
 | Mailpit | Mailpit | 8025 | Local SMTP sink for the gated send (no Google friction — ADR-0015) |
 | ntfy | ntfy (deny-all) | 8090 | Notify-only approval pings; decisions happen only in the authenticated UI |
 | lgtm | grafana/otel-lgtm | 3001 | Tempo + Loki + Prometheus + Grafana; fire-and-forget telemetry receiver |
 
-Every service since M2 is **born instrumented** (ADR-0017): W3C `traceparent` is the
-cross-service join key, the domain correlation id rides as a span attribute and on
-every audit line, and exporters are fire-and-forget (no `depends_on: lgtm`).
+**What Prokura *is* vs what merely proves it.** Prokura is the **trusted surfaces** —
+the token broker, the approval service, and the authority console — plus the identity /
+authorization / secrets / telemetry substrate they run on (Keycloak, OpenFGA, OpenBao,
+Postgres, ntfy, lgtm). The **MCP server, Tools-API, and RAG retriever are *example*
+resource servers**: toy protected resources that demonstrate the chain end-to-end but are
+not part of the product — a real deployment brings its own. This split is visible in the
+compose file: the trusted surfaces + infra come up on a bare `docker compose up`; the toy
+resource servers ride `profiles: ["demo"]` (`docker compose --profile demo up`).
+
+Every service since M2 is **born instrumented** (ADR-0017), now via the shared
+`prokura-telemetry` module: W3C `traceparent` is the cross-service join key; the flow's
+root span is **flow-tagged** (`prokura.flow`) with denials **red** and decisions as span
+**events**; trace↔log correlation is the **native** trace id (a Grafana Tempo→Loki derived
+field), not a hand-copied correlation id; and exporters are fire-and-forget (no
+`depends_on: lgtm`). The observability surface is **Grafana / Tempo / Loki** — there is no
+separate bespoke console (ADR-0025).
 
 ## Core flows
 

@@ -24,9 +24,16 @@ CREATE TABLE IF NOT EXISTS approvals (
     auth_req_id      text,
     created_at       timestamptz NOT NULL DEFAULT now(),
     decided_at       timestamptz,
-    consumed_at      timestamptz
+    consumed_at      timestamptz,
+    -- §3.4: the register span's trace context, so the later ceremony legs
+    -- (delegate/decide/complete) — which cross Keycloak and a background task and
+    -- so can't inherit traceparent — are linked back to one navigable flow.
+    origin_trace_id  text,
+    origin_span_id   text
 );
 ALTER TABLE approvals ADD COLUMN IF NOT EXISTS auth_req_id text;
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS origin_trace_id text;
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS origin_span_id text;
 """
 
 
@@ -39,13 +46,16 @@ def init_db() -> None:
         conn.execute(_DDL)
 
 
-def create(ref, agent, user_id, action, params, hash_, scopes, secret) -> None:
+def create(ref, agent, user_id, action, params, hash_, scopes, secret,
+           origin_trace_id=None, origin_span_id=None) -> None:
     with connect() as conn:
         conn.execute(
             """INSERT INTO approvals
-               (ref, agent, user_id, action, params_json, hash, scopes, status, action_secret)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,'pending',%s)""",
-            (ref, agent, user_id, action, json.dumps(params), hash_, scopes, secret),
+               (ref, agent, user_id, action, params_json, hash, scopes, status,
+                action_secret, origin_trace_id, origin_span_id)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,'pending',%s,%s,%s)""",
+            (ref, agent, user_id, action, json.dumps(params), hash_, scopes, secret,
+             origin_trace_id, origin_span_id),
         )
 
 
@@ -54,6 +64,7 @@ def get(ref: str) -> dict | None:
         row = conn.execute(
             """SELECT ref, agent, user_id, action, params_json, hash, scopes, status,
                       action_secret, delegation_token, auth_req_id, consumed_at,
+                      origin_trace_id, origin_span_id,
                       EXTRACT(EPOCH FROM now() - created_at) AS age_seconds
                FROM approvals WHERE ref=%s""", (ref,),
         ).fetchone()
@@ -61,6 +72,7 @@ def get(ref: str) -> dict | None:
         return None
     cols = ["ref", "agent", "user_id", "action", "params_json", "hash", "scopes",
             "status", "action_secret", "delegation_token", "auth_req_id", "consumed_at",
+            "origin_trace_id", "origin_span_id",
             "age_seconds"]
     d = dict(zip(cols, row))
     d["params"] = json.loads(d.pop("params_json"))

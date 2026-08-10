@@ -58,11 +58,13 @@ def emit_revocation(*, agent: str, user: str, provider: str, correlation_id: str
                     "agent": agent, "user": user, "provider": provider, "set": token})
     if len(_STREAM) > _MAX:
         del _STREAM[: len(_STREAM) - _MAX]
-    # Realtime audit line so the signal is watchable + joinable to the trace.
+    # Realtime audit line so the signal is watchable + joinable to the trace by the
+    # native trace context (attached to the record); the SET token above keeps its
+    # own correlation_id — the only join key external SSF receivers have.
     _log.info(
-        "broker_signal correlation_id=%s event=session-revoked agent=%s user=%s provider=%s",
-        correlation_id, agent, user, provider,
-        extra={"prokura.correlation_id": correlation_id, "prokura.event": "session-revoked"},
+        "broker_signal event=session-revoked agent=%s user=%s provider=%s",
+        agent, user, provider,
+        extra={"prokura.event": "session-revoked"},
     )
     return token
 

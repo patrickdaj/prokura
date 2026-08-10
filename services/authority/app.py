@@ -43,12 +43,12 @@ import audit
 import config
 import exchange
 import fga
-from telemetry import setup_telemetry, tracer
+from prokura_telemetry import setup, stamp_flow, tracer
 from websession import WebSession
 
 HERE = os.path.dirname(__file__)
 app = FastAPI(title="prokura-authority")
-setup_telemetry(app)
+setup(app, config.SERVICE_NAME)
 
 _NAME_RE = re.compile(r"^[a-zA-Z0-9._:-]{1,64}$")
 LINK_REDIRECT = f"{config.AUTHORITY_PUBLIC_URL}/api/link/callback"
@@ -165,6 +165,9 @@ def index() -> FileResponse:
 def register(request: Request) -> JSONResponse:
     sess = _session(request)
     user = sess["preferred_username"]
+    # The principal's control surface — tag the trace so `{ prokura.flow =
+    # "authority-console" }` finds the human's own "who acts for me" reads/actions.
+    stamp_flow("authority-console", user=user)
     at = _fresh_access_token(sess["sid"])
     broker_tok = exchange.exchange_for(at, config.BROKER_AUDIENCE)
     approval_tok = exchange.exchange_for(at, config.APPROVAL_AUDIENCE)
@@ -235,6 +238,7 @@ def api_revoke(agent: str, provider: str, request: Request) -> JSONResponse:
     sess = _session(request)
     if not _NAME_RE.match(agent) or not _NAME_RE.match(provider):
         raise _Http(400, "bad_request")
+    stamp_flow("authority-console", user=sess["preferred_username"], agent=agent)
     at = _fresh_access_token(sess["sid"])
     broker_tok = exchange.exchange_for(at, config.BROKER_AUDIENCE)
     with tracer().start_as_current_span("console.revoke") as span:
