@@ -29,6 +29,13 @@
     <div class="callout">Prokura's consent "agent" is always <code>mcp-server</code> (every tool re-exchanges the inbound
       token as that client), so the consent the demo seeds applies no matter which MCP client — including
       Claude Code — connects. You are not re-consenting per client for the third-party grant.</div>
+    <div class="callout"><b>Where the Tempo filters below go:</b> open Grafana at
+      <a href="http://localhost:3001">localhost:3001</a> → <b>Explore</b> → pick the <b>Tempo</b> data source →
+      <b>TraceQL</b> query box, and paste the <code>{ prokura.flow = "…" }</code> filter shown in each Verify.
+      Only <b>tool calls</b> stamp a flow — <code>get_provider_token</code>→<code>B</code>,
+      <code>send_email</code>→<code>C</code>, <code>rag_search</code>→<code>D</code> — and health-check noise
+      carries no flow tag, so each filter lands on exactly one clean end-to-end trace. Add
+      <code>&amp;&amp; prokura.user = "alice"</code> (or <code>"bob"</code>) to narrow to one person.</div>
   </section>
 
   <section id="a"><div class="stage"><div class="idx">A</div><div>
@@ -52,7 +59,7 @@
     <ul class="checks">
       <li><span class="ck">✓</span><span>Your browser really opened <b>Keycloak's login</b> — the agent never saw the password.</span></li>
       <li><span class="ck">✓</span><span><code>claude mcp list</code> shows <b>prokura · Connected</b> with the three tools.</span></li>
-      <li><span class="ck">✓</span><span>Open Grafana at <a href="http://localhost:3001">localhost:3001</a> → Explore → Tempo, search <code>{ prokura.flow = "B" }</code> — the login + token exchange appear as one trace; the delegated token is <code>aud=mcp-server</code>, <code>exp ≤ 900 s</code>.</span></li>
+      <li><span class="ck">✓</span><span>The handshake itself emits <b>no Prokura trace</b> — discovery, DCR and PKCE run in Keycloak and the server's OAuth endpoints, which aren't on Prokura's telemetry. That's expected: the delegated <code>aud=mcp-server</code> token becomes <b>visible in a trace</b> the first time you use it — the <code>keycloak.mcp_exchange</code> span inside Flow B (<code>{ prokura.flow = "B" }</code>), where you can confirm <code>aud=mcp-server</code> and <code>exp ≤ 900 s</code>.</span></li>
     </ul>
     <div class="cap"><b>What it proves:</b> a real, independent MCP client obtains delegated authority through the standard handshake — nothing Prokura-specific on the client side. → <a href="delegation.html">Flow A deep-dive</a></div>
   </div></div></section>
@@ -67,7 +74,7 @@
     <ul class="checks">
       <li><span class="ck">✓</span><span>The result carries <code>expires_in: 900</code> and <b>no</b> <code>refresh_token</code>.</span></li>
       <li><span class="ck">✓</span><span>Open OpenBao at <a href="http://localhost:8200">localhost:8200</a> (dev root token <code>prokura-dev-root</code>) → <code>secret/grants/alice/acme</code> holds the refresh credential (masked) — <b>the durable secret Claude never receives</b>.</span></li>
-      <li><span class="ck">✓</span><span>In the Tempo waterfall, the trace shows <code>fga.check</code> → OpenFGA, <code>openbao.read_grant</code>, and <code>provider.refresh</code> — all inside the one call.</span></li>
+      <li><span class="ck">✓</span><span>In Tempo, filter <code>{ prokura.flow = "B" }</code> — the waterfall shows <code>tool.get_provider_token</code> → <code>keycloak.mcp_exchange</code> → the broker's <code>fga.check</code> → OpenFGA, <code>openbao.read_grant</code>, and <code>provider.refresh</code>, all inside the one call.</span></li>
     </ul>
     <div class="cap"><b>What it proves:</b> the agent is handed a bounded capability; authorization and secret custody happen server-side. → <a href="brokering.html">Flow B deep-dive</a></div>
   </div></div></section>
@@ -86,6 +93,7 @@
       <li><span class="ck">✓</span><span>You get an ntfy push (<a href="http://localhost:8090">localhost:8090</a>); open the approval UI at <a href="http://localhost:8120/approvals">localhost:8120/approvals</a>, <b>sign in as alice</b> (M7: the surface has a real session — no token in the link), confirm it shows the exact <code>to</code>/<code>subject</code>/<code>body</code> <b>the server stored</b>, and click <b>Approve</b>.</span></li>
       <li><span class="ck">✓</span><span>Ask Claude to retry → it sends. The mail appears in Mailpit at <a href="http://localhost:8025">localhost:8025</a>.</span></li>
       <li><span class="ck">✓</span><span>A second use of the same approval is refused (<code>409</code>, single-use).</span></li>
+      <li><span class="ck">✓</span><span>In Tempo, filter <code>{ prokura.flow = "C" }</code> — the refused first attempt renders <b>red</b> (a denied span carrying the <code>approval_required</code> decision), and the approved retry decomposes across mcp → approval → tools; the <b>Tempo→Loki</b> jump on any span lands on the matching audit lines.</span></li>
     </ul>
     <div class="cap"><b>What it proves:</b> a human approved the action the <i>server</i> holds — not agent text — and it ran exactly once. → <a href="approval.html">Flow C deep-dive</a></div>
   </div></div></section>
@@ -106,7 +114,7 @@
     <ul class="checks">
       <li><span class="ck">✓</span><span><b>alice's</b> answer names <b>Meridian</b> (she is a viewer of <code>secret-roadmap</code>).</span></li>
       <li><span class="ck">✓</span><span><b>bob's</b> identical query <b>never mentions Meridian</b> — the same top hit is filtered out.</span></li>
-      <li><span class="ck">✓</span><span>In Grafana, each search logs <code>rag_audit … candidates=4 allowed=3</code> (reachable via the Tempo→Loki jump), and the trace shows <code>fga.batch_check</code> evaluated as the querying user.</span></li>
+      <li><span class="ck">✓</span><span>In Tempo, filter <code>{ prokura.flow = "D" }</code> for both searches — or narrow to one person with <code>{ prokura.flow = "D" &amp;&amp; prokura.user = "bob" }</code>. Each trace shows <code>fga.batch_check</code> evaluated as <b>the querying user</b>; the <b>Tempo→Loki</b> jump reaches that search's <code>rag_audit … candidates=4 allowed=3</code> (bob's shows one fewer allowed).</span></li>
     </ul>
     <div class="cap"><b>What it proves:</b> retrieval is authorized as the human, not the agent — the confused-deputy is dead. → <a href="rag.html">Flow D deep-dive</a></div>
   </div></div></section>
