@@ -1,0 +1,93 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prokura Walkthrough — The Authority Console</title>
+<link rel="stylesheet" href="walkthrough.css">
+<div class="rail"><div class="wrap">
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav"><a href="index.html">← Walkthrough</a><a href="../blog/m8-authority-console.html">M8 blog</a></div>
+</div></div>
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Surface · the authority console</p>
+    <h1>One place to read the register and tear up the grant</h1>
+    <p class="thesis">Power of attorney is only tolerable if you can <b>see who acts for you</b> and <b>revoke it in one click</b>. The authority console is the principal's own signed-in page: every agent acting for you, the grants each can use, your approvals, your notification topic, and a live feed — plus revoke and "connect a provider". It adds <b>no new authority</b>: it relays <i>your</i> authority downstream by token exchange, with the broker still the sole writer. Every screen below is captured live.</p>
+    <div class="meta"><span class="chip">own OIDC session</span><span class="chip">RFC 8693 exchange</span><span class="chip ok">no new writer</span><span class="chip ok">subject preserved</span></div>
+  </header>
+  <hr>
+
+  <section><div class="stage"><div class="idx">01</div><div>
+    <h3>Sign in → read your register</h3>
+    <p>You log in on the console's own surface (Authorization Code + PKCE, the <code>authority-ui</code> client, a signed session cookie — no <code>?token=</code> anywhere). It then shows, for you alone: the agents you operate, each with its consented grants and scopes.</p>
+    <div class="screen pic trim"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8160 — your authority register</span></div>
+      <div class="body"><a href="img/authority-register.png" target="_blank" rel="noopener"><img src="img/authority-register.png" alt="The authority console signed in as alice: My agents lists agent-app and mcp-server, each operator: you, each with an acme grant (openid email profile) and a Revoke button"></a></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the principal's scattered authority — agents, grants, approvals, topic — is aggregated behind one authenticated session, derived from service-held state, none from client-supplied identity.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">02</div><div>
+    <h3>Downstream is <i>your</i> authority, by exchange — never a service acting for nobody</h3>
+    <p>The console holds no service credential that acts on authorization state and asserts no username out of band. For every read or action it exchanges (RFC 8693) your session token — as the <code>authority-console</code> client — into the exact audience it needs. The exchanged token <b>preserves your subject</b>, so downstream the owner is the verified token subject.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">token exchange, per read/action</span></div>
+      <div class="body term"><pre>authority-ui login        → token.sub=<span class="g">alice</span>  aud=[<span class="g">authority-console</span>]  <span class="c">// exchangeable</span>
+exchange (authority-console) → aud=<span class="g">token-broker</span>   sub=<span class="g">alice</span> preserved   <span class="c">// consents, revoke, import</span>
+exchange (authority-console) → aud=<span class="g">approval</span>       sub=<span class="g">alice</span> preserved   <span class="c">// approvals, topic</span>
+<span class="o">// the broker sees owner = verified subject — the same M7 write-guard, reused</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the console is a <i>surface</i>, not a new authority — a confused-deputy that asserts identity out of band is exactly what this refuses.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">03</div><div>
+    <h3>One click tears up the delegation</h3>
+    <p>Clicking <b>Revoke</b> exchanges your token for <code>aud=token-broker</code> and calls the broker's revoke — the <i>same</i> code path and audit event as the M7 consent screen. The tuple is deleted, the register reflects it, and every other agent is untouched. Honest about latency: effect applies on the agent's next hand-out (instant is M9).</p>
+    <div class="screen pic trim"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8160 — after revoking agent-app</span></div>
+      <div class="body"><a href="img/authority-revoked.png" target="_blank" rel="noopener"><img src="img/authority-revoked.png" alt="After revoke: agent-app now shows No grants consented to this agent, while mcp-server keeps its acme grant"></a></div>
+    </div>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">verified by looking · the real sinks</span></div>
+      <div class="body term"><pre><span class="p">$</span> revoke agent-app / acme   → exchange → broker <span class="k">POST /v1/consent/revoke</span>
+OpenFGA: can_use(agent:<span class="g">agent-app</span>, grant:alice/acme)   → <span class="b">gone</span>
+agent-app next hand-out: <span class="k">POST /v1/tokens/acme</span>        → <span class="b">403 not_consented</span>
+loki: broker_audit decision=<span class="g">consent_revoked</span> user=alice agent=agent-app <span class="o">azp=authority-console</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> revoke is real — tuple gone in OpenFGA, a <code>consent_revoked</code> audit line in Loki with <i>you</i> as the acting user, and the revoked agent's next request refused.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">04</div><div>
+    <h3>Connect a provider — a real person links, end to end</h3>
+    <p>"Connect a provider" routes you into Keycloak account linking (<code>kc_action=idp_link</code>) in your <i>own</i> browser; you log into the provider, and on return the console imports the grant with your exchanged token. No admin API, no demo driver — closing Flow B's last gap.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8160 — connect a provider</span></div>
+      <div class="body"><a href="img/authority-connect.png" target="_blank" rel="noopener"><img src="img/authority-connect.png" alt="The Connect a provider section with a Connect acme button"></a></div>
+    </div>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">the linking ceremony</span></div>
+      <div class="body term"><pre><span class="p">$</span> GET /api/link/acme        → kc_action=idp_link:acme  <span class="c">// your browser</span>
+… provider login … link     → kc_action_status=<span class="g">success</span>
+/api/link/callback          → exchange → broker <span class="k">POST /v1/grants/acme/import</span>  <span class="c">// your token</span>
+register.grants += <span class="g">acme</span>       <span class="o">// no admin API, no demo driver ran</span></pre></div>
+    </div>
+    <div class="screen pic trim"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8160 — back on the register</span></div>
+      <div class="body"><a href="img/authority-connected.png" target="_blank" rel="noopener"><img src="img/authority-connected.png" alt="Signed in as bob: a green banner reads Connected acme — the grant is in your register below"></a></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> a real person routes themselves into <code>idp_link</code> and the grant lands imported under their own identity — the last correct-party gap, closed.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">05</div><div>
+    <h3>Notification onboarding — learn your topic</h3>
+    <p>The console shows your unguessable ntfy topic and a subscribe affordance (URL + QR), read from the approval service with your user-bound token. The topic salt never leaves that service, and the topic stays notify-only — knowing it grants nothing (ADR-0007).</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8160 — notifications</span></div>
+      <div class="body"><a href="img/authority-topic.png" target="_blank" rel="noopener"><img src="img/authority-topic.png" alt="The Notifications section: a QR code, the subscribe URL localhost:8090/prokura-approvals-…, a Copy subscribe link button and an Open ntfy button"></a></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the last scattered piece — "where do my approval pushes go?" — is answered on the same page, without the topic derivation ever leaving the approval service.</div>
+  </div></div></section>
+
+  <section>
+    <h2>What this surface guarantees</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>One <b>signed-in</b> page shows only the principal's own agents, grants, approvals, topic and activity — cross-principal data is never reachable.</span></li>
+      <li><span class="ck">✓</span><span>Every downstream call carries the user's <b>exchanged, subject-preserving</b> token — no service account acting for nobody, no out-of-band username.</span></li>
+      <li><span class="ck">✓</span><span>Revoke converges on the broker (the <b>sole</b> tuple writer) and the same audit event as the consent screen; the console writes no authorization state.</span></li>
+      <li><span class="ck">✓</span><span>A real person <b>links a provider</b> from the console — no admin API — closing the last correct-party gap.</span></li>
+    </ul>
+    <p style="margin-top:18px"></p>
+    <div class="callout">The console as an aggregating trusted surface that relays the principal's own authority by token exchange (no new write authority) is <b><a href="https://github.com/patrickdaj/prokura/blob/main/docs/adr/0023-the-authority-console-is-an-aggregating-trusted-surface.md">ADR-0023</a></b>.</div>
+  </section>
+  <footer><div class="nextlink"><div><div class="lab">Back to</div><a href="index.html">The full walkthrough →</a></div><div style="text-align:right"><div class="lab">Build log</div><a href="../blog/m8-authority-console.html">M8 blog →</a></div></div></footer>
+</div>
