@@ -1,0 +1,105 @@
+# Prokura-owned OTel Collector config for the bundled otel-lgtm.
+#
+# Verbatim copy of the image's /otel-lgtm/otelcol-config.yaml (grafana/otel-lgtm
+# 0.30.0) with ONE addition: a `filter/noise` processor on the traces pipeline.
+#
+# Why: the flow traces capture the full cross-service story, but auto-instrumentation
+# buries it — each HTTP hop emits duplicate ASGI `… http send/receive` spans, Keycloak
+# emits ~35 internal transaction/H2/Infinispan spans per token call, and OpenFGA emits
+# its full ~49-node resolver tree per check. A single Flow B trace was 67 spans; the
+# domain story (exchange → fga.check → openbao.read_grant → provider.refresh) was a
+# thin slice near the top. This processor drops the noise so the waterfall reads as the
+# flow — in live Grafana, not just captured screenshots.
+#
+# The filter DROPS a span when any listed condition is true. To avoid orphaning, we keep
+# each foreign service's subtree ROOT (the direct child of our own client span) and drop
+# only its descendants:
+#   - keycloak: keep `POST /realms/...` (token + CIBA endpoints); drop the rest.
+#   - openfga:  keep the `POST` root and the `openfga.v1.*` gRPC span; drop the resolver tree.
+#   - all svcs: drop the ASGI `… http send` / `… http receive` event-spans (leaf noise).
+# Our own spans (keycloak.mcp_exchange, fga.check, fga.batch_check, the httpx client
+# `POST` edges) are untouched, so the `→ Keycloak` / `→ OpenFGA` cross-service edges and
+# every prokura.* decision remain in the trace.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - http://*
+  prometheus/collector:
+    config:
+      scrape_configs:
+        - job_name: "opentelemetry-collector"
+          scrape_interval: 1s
+          static_configs:
+            - targets: ["127.0.0.1:8888"]
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: "/ready"
+
+processors:
+  batch:
+  # Prokura: strip auto-instrumentation noise so a flow trace reads as the flow.
+  filter/noise:
+    error_mode: ignore
+    traces:
+      span:
+        # Duplicate ASGI event-spans emitted per HTTP hop (leaf spans, safe to drop).
+        - 'IsMatch(name, " http (send|receive)$")'
+        # Keycloak internals: keep only the token / CIBA HTTP endpoint (subtree root).
+        - 'resource.attributes["service.name"] == "keycloak" and not IsMatch(name, "^POST /realms/")'
+        # OpenFGA resolver tree: keep the HTTP `POST` root and the `openfga.v1.*` gRPC span.
+        - 'resource.attributes["service.name"] == "openfga" and name != "POST" and not IsMatch(name, "^openfga\\.v1")'
+
+exporters:
+  otlp_http/metrics:
+    endpoint: http://127.0.0.1:9090/api/v1/otlp
+    tls:
+      insecure: true
+  otlp_http/traces:
+    endpoint: http://127.0.0.1:4418
+    tls:
+      insecure: true
+  otlp_http/logs:
+    endpoint: http://127.0.0.1:3100/otlp
+    tls:
+      insecure: true
+  otlp_grpc/profiles:
+    endpoint: http://127.0.0.1:4040
+    tls:
+      insecure: true
+  debug/metrics:
+    verbosity: detailed
+  debug/traces:
+    verbosity: detailed
+  debug/logs:
+    verbosity: detailed
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [filter/noise, batch]
+      exporters: [otlp_http/traces]
+      #exporters: [otlp_http/traces,debug/traces]
+    metrics:
+      receivers: [otlp, prometheus/collector]
+      processors: [batch]
+      exporters: [otlp_http/metrics]
+      #exporters: [otlp_http/metrics,debug/metrics]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/logs]
+      #exporters: [otlp_http/logs,debug/logs]
+    profiles:
+      receivers: [otlp]
+      exporters: [otlp_grpc/profiles]

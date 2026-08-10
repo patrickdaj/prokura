@@ -176,6 +176,10 @@ services:
       # (and the Loki->Tempo derived field) so correlation is repo-controlled, not an
       # image default that can drift on a bump. Replaces the image's grafana-datasources.yaml.
       - ./deploy/lgtm/prokura-datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
+      # Prokura-owned collector config: adds a filter/noise processor to the traces
+      # pipeline so flow traces read as the flow (drops ASGI http send/receive dupes and
+      # Keycloak/OpenFGA internal subtrees). Otherwise verbatim from the 0.30.0 image.
+      - ./deploy/lgtm/otelcol-config.yaml:/otel-lgtm/otelcol-config.yaml:ro
 
   # ── PROKURA (the trusted surfaces — the product) ────────────────────────────
   # M8: Authority Console — the principal's aggregated authority register. A

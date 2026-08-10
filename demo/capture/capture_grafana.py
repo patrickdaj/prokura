@@ -55,41 +55,34 @@ def loki_url(trace_id: str) -> str:
 
 def _collapse_noise(page) -> None:
     """Collapse the query editor and Keycloak's internal subtrees so the waterfall
-    shows the cross-service chain (mcp → exchange → rag → pgvector → fga → openfga),
-    not Keycloak's hundred internal spans."""
-    # Query editor row: the "Collapse query row" toggle.
+    shows the cross-service chain (mcp → exchange → rag → pgvector → fga → openfga)."""
+    # Query editor row: the "Collapse query row" toggle — reclaim vertical space.
     try:
         page.get_by_label("Collapse query row").first.click(timeout=2000)
     except Exception:
         pass
-    # Collapse the token-exchange subtree(s): click the span-bar toggle next to any
-    # span whose operation contains "mcp_exchange" or "processGrantRequest".
-    for needle in ("keycloak.mcp_exchange", "authority_exchange", "TokenEndpoint.processGrantRequest"):
-        try:
-            row = page.get_by_text(needle, exact=False).first
-            if row.count():
-                # the expand/collapse chevron sits just left of the operation label
-                box = row.bounding_box()
-                if box:
-                    page.mouse.click(box["x"] - 12, box["y"] + box["height"] / 2)
-        except Exception:
-            pass
+    # NOTE: we no longer collapse the keycloak/exchange subtrees. The collector's
+    # filter/noise processor already drops Keycloak's internal spans, leaving just the
+    # single `POST /realms/.../token` span — the `→ Keycloak` edge we WANT in frame.
 
 
 def capture_trace(trace_id: str, out_name: str) -> str:
     out = os.path.abspath(os.path.join(IMG, f"{out_name}.png"))
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1440, "height": 960}, device_scale_factor=2)
+        # Tall viewport so the whole (now noise-filtered, ~15-span) waterfall renders —
+        # the collector's filter/noise processor keeps traces short enough to show in full.
+        page = browser.new_page(viewport={"width": 1440, "height": 1900}, device_scale_factor=2)
         page.goto(explore_url(trace_id), wait_until="networkidle")
         page.wait_for_selector(TRACE_PANEL, timeout=15000)
         page.wait_for_timeout(1500)
         _collapse_noise(page)
         page.wait_for_timeout(800)
         box = page.query_selector(TRACE_PANEL).bounding_box()
-        # Clip: the Trace header + overview + top spans (cross-service chain), not all 87.
+        # Clip the full domain tree: filtered traces are ~15 spans, so the whole flow
+        # (down to openbao.rotate_grant / fga.batch_check) fits — no payload below the fold.
         clip = {"x": box["x"], "y": box["y"], "width": box["width"],
-                "height": min(box["height"], 760)}
+                "height": min(box["height"], 1800)}
         page.screenshot(path=out, clip=clip)
         browser.close()
     print(f"wrote {out}")
