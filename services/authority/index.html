@@ -189,8 +189,15 @@
     btn.disabled = true; btn.textContent = "Revoking…";
     const r = await fetch(`/api/revoke/${encodeURIComponent(btn.dataset.agent)}/${encodeURIComponent(btn.dataset.provider)}`,
       { method: "POST" });
-    if (r.ok) { banner("ok", `Revoked ${btn.dataset.agent}'s access to ${btn.dataset.provider}. Effect applies on its next token request.`);
-      loadRegister(); }
+    if (r.ok) {
+      const b = await r.json().catch(() => ({}));
+      // M9: report the measured kill time + the honest in-flight residual.
+      let msg = `Revoked ${btn.dataset.agent}'s access to ${btn.dataset.provider}.`;
+      if (b.stop_ms != null) msg += ` New authority denied in ${b.stop_ms} ms.`;
+      if (b.residual_seconds != null) msg += ` Any token already issued expires within ≤ ${b.residual_seconds} s.`;
+      banner("ok", msg);
+      loadRegister();
+    }
     else { banner("err", "Revoke failed (HTTP " + r.status + ")."); btn.disabled = false; btn.textContent = "Revoke"; }
   }
 

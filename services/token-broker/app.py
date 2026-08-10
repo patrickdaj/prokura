@@ -9,7 +9,8 @@ Endpoints:
   GET  /consent                       per-agent consent screen (authenticated)
   POST /consent                       write the can_use tuple (sole writer)
   GET  /v1/consents                   M8: list the console user's consents (user-bound bearer)
-  POST /v1/consent/revoke             revoke one agent's consent (session OR user-bound bearer)
+  POST /v1/consent/revoke             M9: revoke = kill switch (tuple + deny-list + KC + signal)
+  GET  /ssf/stream                    M9: CAEP/SSF revocation Security Event Tokens (poll)
 
 Born instrumented: traceparent join key + prokura.correlation_id, realtime audit.
 """
@@ -27,6 +28,8 @@ import consent
 import db
 import fga
 import grants
+import revocation
+import signals
 import validation
 from telemetry import setup_telemetry
 from websession import WebSession
@@ -78,6 +81,13 @@ def healthz() -> dict:
     return {"ok": True}
 
 
+@app.get("/ssf/stream")
+def ssf_stream(since: int = 0) -> JSONResponse:
+    # M9 demo CAEP/SSF poll transmitter: revocation Security Event Tokens a
+    # receiver can consume. Single in-memory stream (demo-grade).
+    return JSONResponse({"events": signals.stream(since)})
+
+
 @app.post("/v1/tokens/{provider}")
 async def issue_token(provider: str, request: Request,
                       authorization: str | None = Header(default=None)) -> JSONResponse:
@@ -117,6 +127,13 @@ async def issue_token(provider: str, request: Request,
     if not consent.is_allowed(agent, user, provider):
         audit.emit(decision="denied_consent", user=user, agent=agent, provider=provider)
         raise _Http(403, "not_consented")
+
+    # Step (M9 kill switch): propagation-free deny-list — a "stop now" checked on
+    # every hand-out, independent of OpenFGA read state; a null-provider entry
+    # denies all of the agent's grants for this user.
+    if db.is_denied(agent, user, provider):
+        audit.emit(decision="denied_killed", user=user, agent=agent, provider=provider)
+        raise _Http(403, "revoked")
 
     try:
         issued = grants.issue_provider_token(user, provider)
@@ -236,6 +253,9 @@ async def write_consent(request: Request) -> JSONResponse:
         audit.emit(decision="consent_refused", user=user, agent=agent, provider=provider,
                    detail=str(e))
         raise _Http(403, "consent_refused")
+    # M9: granting consent clears any prior kill deny-entry, so a re-consented
+    # agent is usable again (the durable tuple and the deny-list agree).
+    revocation.unkill(agent, user, provider)
     audit.emit(decision="consent_granted", user=user, agent=agent, provider=provider)
     return JSONResponse({"consented": True, "agent": agent, "provider": provider})
 
@@ -252,10 +272,16 @@ async def revoke_consent(request: Request,
     body = await request.json()
     agent = body.get("agent")
     provider = body.get("provider")
-    consent.revoke_consent(agent, user, provider)
+    # M9: per-grant revoke fans out to the kill switch (tuple delete + deny-list
+    # + CAEP signal) and returns a measured time-to-stop plus the honest in-flight
+    # residual. Scoped: the agent's session and other grants are untouched, and
+    # the deny-list blocks re-acquiring THIS grant even with a fresh token.
+    result = revocation.kill(agent, user, provider, azp=azp)
     audit.emit(decision="consent_revoked", user=user, agent=agent, provider=provider,
-               detail=f"azp={azp}")
-    return JSONResponse({"revoked": True, "agent": agent, "provider": provider})
+               detail=f"azp={azp} stop_ms={result['stop_ms']}")
+    return JSONResponse({"revoked": True, "agent": agent, "provider": provider,
+                         "stop_ms": result["stop_ms"],
+                         "residual_seconds": result["residual_seconds"]})
 
 
 @app.get("/v1/consents")

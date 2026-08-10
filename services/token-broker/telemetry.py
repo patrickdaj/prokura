@@ -13,9 +13,12 @@ Design invariants (observability DoD):
 
 import logging
 
-from opentelemetry import trace
+from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
     OTLPLogExporter,
+)
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
+    OTLPMetricExporter,
 )
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
     OTLPSpanExporter,
@@ -24,6 +27,8 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -31,6 +36,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 import config
 
 _AUDIT_LOGGER = "prokura.audit"
+_stop_ms_hist = None
 
 
 def setup_telemetry(app) -> logging.Logger:
@@ -56,9 +62,31 @@ def setup_telemetry(app) -> logging.Logger:
     audit_logger.addHandler(logging.StreamHandler())  # also to stdout for docker logs
     audit_logger.propagate = False
 
+    # Metrics -> Prometheus (via the LGTM OTLP receiver). Fire-and-forget: the
+    # periodic reader drops on export failure. M9 records the revocation
+    # time-to-stop here so the operator dashboard can graph "how fast to stop".
+    meter_provider = MeterProvider(
+        resource=resource,
+        metric_readers=[PeriodicExportingMetricReader(
+            OTLPMetricExporter(endpoint=config.OTLP_ENDPOINT, insecure=True),
+            export_interval_millis=10_000)],
+    )
+    metrics.set_meter_provider(meter_provider)
+    global _stop_ms_hist
+    _stop_ms_hist = meter_provider.get_meter("prokura.token-broker").create_histogram(
+        "prokura.revocation.stop_ms", unit="ms",
+        description="Time from revoke to the agent losing the ability to be issued or "
+                    "re-acquire authority (the kill switch's measured time-to-stop).")
+
     FastAPIInstrumentor.instrument_app(app)
     HTTPXClientInstrumentor().instrument()
     return audit_logger
+
+
+def record_stop_ms(ms: int, *, agent: str) -> None:
+    """M9: record the revocation time-to-stop so the dashboard can surface it."""
+    if _stop_ms_hist is not None:
+        _stop_ms_hist.record(ms, {"agent": agent})
 
 
 def tracer():

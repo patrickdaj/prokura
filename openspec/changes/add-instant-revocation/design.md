@@ -43,19 +43,35 @@ demo-grade infrastructure; verified by looking + measured against the real sinks
 
 ## Decisions
 
-### D1 — The kill switch is a broker function, invoked by the same revoke paths
+### D1 — Two grains: a scoped per-grant revoke and a broader agent-wide kill
 
-A new `services/token-broker/revocation.py` exposes `kill(agent, user, provider, *, azp)`
-that fans out: (1) delete the `can_use` tuple (existing `consent.revoke_consent`); (2) write
-a **deny-list** entry; (3) revoke the agent's Keycloak sessions/offline tokens for this user
-(D3); (4) emit a CAEP SET (D4); and returns timing. Both revoke paths converge on it — the
-M7 consent-surface session and the M8 console exchanged-bearer — so nothing new asserts
-identity and the broker stays the single actor on authorization state under the owner
-invariant.
+A new `services/token-broker/revocation.py` distinguishes two revoke grains — a distinction
+that surfaced during implementation and matters for correctness:
 
-*Alternative — a standalone revocation service:* rejected; it would split ownership of
-authorization state away from the broker (which already holds the tuple-write guard and the
-hand-out gate) and add a second trust position for no benefit at demo scale.
+- **`kill(agent, user, provider)` — per-grant revoke** (what the console/consent-surface
+  button does): (1) delete the `can_use` tuple; (2) write a **deny-list** entry for that
+  grant; (3) emit a CAEP SET (D4); return timing + residual. It is instant and **scoped** —
+  the agent's Keycloak session and its *other* consented grants are untouched. Re-acquiring
+  **this** grant is blocked even with a brand-new user token, because the deny-list denies
+  before the provider is contacted, so no Keycloak session revocation is needed to protect
+  the revoked grant.
+- **`kill_agent(agent, user)` — the agent-wide kill**: an agent-wide (null-provider) deny
+  entry, delete of *every* `can_use` tuple the agent holds on the user's grants, **and**
+  Keycloak session/offline revocation for the agent client (D3), so the agent cannot
+  re-acquire *any* authority. This de-delegates the agent entirely; the human's own sessions
+  are never touched. It is the "stop this agent everywhere" move.
+
+Deleting the agent's Keycloak `act-on-your-behalf` consent (D3) de-delegates it for *all*
+grants — correct for an agent-wide kill, but wrong for a per-grant revoke (it would revoke
+grants the user did not ask to touch, and break the agent's other consents). So the KC move
+lives only in `kill_agent`. Both are broker functions under the owner invariant; the broker
+stays the single actor on authorization state.
+
+*Alternative — fold KC revocation into every per-grant revoke:* rejected during
+implementation; it violates per-grant scoping ("revoke one grant without disturbing the
+others") and the deny-list already blocks re-acquiring the revoked grant. *Alternative — a
+standalone revocation service:* rejected; it would split ownership of authorization state
+away from the broker for no benefit at demo scale.
 
 ### D2 — Continuous evaluation: a deny-list checked on every hand-out + bounded TTL
 
@@ -156,11 +172,35 @@ is new and read-only), a new confidential admin-capable broker client + minimal 
 (the console/surface revoke request bodies are unchanged). Rollback = git revert + clean
 compose up.
 
-## Open Questions (spike resolves)
+## Spike findings (`spike/kill-switch/kill_spike.py`, run against the live stack)
 
-- Exact Keycloak API + **minimal** admin role to revoke an agent client's offline
-  sessions/consent for one user without logging out the human. (Leading candidate: delete
-  the user's consent for the agent client; fallback: filtered session logout.)
-- The honest provider-token TTL floor (120 s vs lower) given mock-provider refresh behavior.
-- SET signing key: reuse a broker realm-client key vs a self-signed broker key for the
-  demo SSF stream.
+- **(a) tuple delete is already ~instant.** Deleting the `can_use` tuple denies the next
+  broker hand-out in **~36 ms** (FGA propagation), confirming M8's per-hand-out check is
+  effectively instant for *future* hand-outs. The deny-list is therefore not about the
+  tuple path's speed but about **breadth** (agent-wide, null-provider), a **reason** record,
+  and a propagation-free guarantee that doesn't depend on FGA read state.
+- **(b) the load-bearing move is a targeted consent delete — CONFIRMED.**
+  `DELETE /admin/realms/{realm}/users/{id}/consents/agent-app` → **204**, after which the
+  agent's refresh (`grant_type=refresh_token`) returns **`400 invalid_grant`** — the agent
+  is stopped at the source and cannot re-mint. The human's interactive sessions are
+  **untouched** (3 → 3): this is scoped to the agent *client* for that user, not a user
+  logout. It revokes the client's **online and offline** refresh alike (agent-app is not
+  even granted `offline_access`, yet its online refresh is killed), so it is the complete
+  mechanism regardless of token kind. **Minimal role:** the broker's service account needs
+  realm-management **`manage-users`** to delete a user's client consent (task 2.1) — broad
+  enough to manage user consents, far short of `realm-admin`; audited with azp on every call.
+- **(c) the in-flight residual is real and must be honest.** A provider (acme) access token
+  issued moments before revoke still validates at acme's `userinfo` **after** revoke (200),
+  because the mock provider has no revocation endpoint. It stays valid until its TTL — today
+  the broker's `expires_in=900`. M9 **bounds this to a small floor (120 s default)** and
+  **reports** the residual on revoke rather than pretending a provider token was killed.
+
+## Open Questions (resolved / remaining)
+
+- ~~Exact Keycloak API + minimal role~~ **Resolved:** `DELETE users/{id}/consents/{agent-client}`
+  (204), realm-management `manage-users`; kills online + offline refresh; human sessions
+  untouched (spike b).
+- ~~Honest provider-token TTL floor~~ **Resolved:** 120 s default (residual is otherwise the
+  full 900 s; spike c). Configurable; real deployments tune against provider rate limits.
+- SET signing key: reuse a broker realm-client key vs a self-signed broker key — deferred to
+  build (self-signed broker key is the low-risk default for the demo SSF stream).

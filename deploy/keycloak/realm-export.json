@@ -76,6 +76,19 @@
           "read-token"
         ]
       }
+    },
+    {
+      "username": "service-account-token-broker",
+      "enabled": true,
+      "serviceAccountClientId": "token-broker",
+      "realmRoles": [
+        "default-roles-prokura"
+      ],
+      "clientRoles": {
+        "realm-management": [
+          "manage-users"
+        ]
+      }
     }
   ],
   "clientScopes": [

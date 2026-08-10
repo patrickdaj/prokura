@@ -226,6 +226,10 @@ services:
       UI_CLIENT_ID: broker-ui
       UI_CLIENT_SECRET: ${BROKER_UI_CLIENT_SECRET:-broker-ui-dev-secret}
       SESSION_SECRET: ${BROKER_SESSION_SECRET:-broker-session-dev-secret}
+      # M9 kill switch: bounded provider-token TTL (small honest in-flight residual)
+      # + CAEP/SSF Security Event Token signing key.
+      BROKER_MAX_TTL_SECONDS: ${BROKER_MAX_TTL_SECONDS:-120}
+      SSF_SIGNING_SECRET: ${SSF_SIGNING_SECRET:-prokura-ssf-dev-secret}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
       OTEL_SERVICE_NAME: token-broker
     depends_on:

@@ -14,13 +14,16 @@ of the v1 spine (`docs/architecture.md` §"Beyond parity" #3, §"v1 delivery pla
 
 ## What Changes
 
-- **New capability `revocation`** — a **kill switch** that, on a single revoke, fans out
-  across every path that can stop an agent and reports the *measured* time-to-stop:
-  1. delete the `can_use` tuple (already denies the next broker hand-out);
-  2. revoke the agent's **Keycloak sessions + offline/refresh tokens** so it can obtain no
-     new user-bound authority to exchange;
-  3. add a broker **deny-list** entry (agent · grant, and agent · user) checked before
-     every hand-out — a propagation-free "stop now" independent of tuple/JWKS timing.
+- **New capability `revocation`** — a **kill switch** at two grains, reporting the
+  *measured* time-to-stop:
+  1. **per-grant revoke** (the console button): delete the `can_use` tuple + add a broker
+     **deny-list** entry for that grant + emit a signal — instant and **scoped** (the
+     agent's session and other grants untouched). Re-acquiring the grant is blocked even
+     with a fresh token, because the deny-list denies before the provider is contacted.
+  2. **agent-wide kill**: an agent-wide (null-provider) deny + delete of every tuple the
+     agent holds + revoke of the agent's **Keycloak sessions + offline/refresh tokens** so
+     it can obtain no new user-bound authority — the "stop this agent entirely" move that
+     de-delegates it. The human's own sessions are never touched.
 - **Continuous evaluation on every hand-out** — the broker's hand-out chain SHALL
   re-evaluate the deny-list in addition to the consent tuple, and provider-token TTLs are
   bounded to a small, honestly-reported residual (the only window Prokura cannot shorten
@@ -52,9 +55,10 @@ of the v1 spine (`docs/architecture.md` §"Beyond parity" #3, §"v1 delivery pla
   bounded so the post-revocation in-flight window is small and reported. (The existing
   consent-tuple check and validation chain are unchanged.)
 - `per-agent-consent`: consent revocation SHALL take effect within seconds rather than
-  only on the next hand-out — the same owner-authenticated revoke additionally revokes the
-  agent's Keycloak sessions/offline tokens, writes a broker deny entry, and emits a
-  revocation signal; both revoke paths (surface + console) converge on the extended path.
+  only on the next hand-out — the same owner-authenticated revoke additionally writes a
+  broker deny entry and emits a revocation signal, and re-acquiring the revoked grant is
+  blocked even with a fresh token; both revoke paths (surface + console) converge on the
+  extended path, which stays scoped to the one grant.
 - `authority-console`: the console's revoke SHALL invoke the kill switch and report the
   measured time-to-stop and the honest in-flight residual to the signed-in principal.
 - `observability`: a "time to stop" measurement SHALL be recorded per revocation and

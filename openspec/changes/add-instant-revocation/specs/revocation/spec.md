@@ -2,34 +2,43 @@
 
 ## ADDED Requirements
 
-### Requirement: Single-revoke kill fan-out
-A single owner-authenticated revoke SHALL fan out, under the same owner invariant, across
-every path that can stop an agent: it SHALL delete the `can_use` consent tuple, write a
-broker deny-list entry, revoke the agent client's Keycloak sessions and offline/refresh
-tokens **for that user**, and emit a revocation signal. The fan-out SHALL be performed by
-the broker (the sole writer of authorization state); both existing revoke paths (the M7
-consent surface session and the M8 authority console exchanged bearer) SHALL converge on it.
+### Requirement: Per-grant revoke fan-out
+A single owner-authenticated per-grant revoke SHALL, under the owner invariant, delete the
+`can_use` consent tuple, write a broker deny-list entry for that grant, and emit a
+revocation signal — instantly and **scoped**: the agent's Keycloak session and its other
+consented grants SHALL be untouched. The fan-out SHALL be performed by the broker (the sole
+writer of authorization state); both existing revoke paths (the M7 consent surface session
+and the M8 authority console exchanged bearer) SHALL converge on it.
 
-#### Scenario: One revoke stops the agent on every path
+#### Scenario: One revoke stops the agent on the revoked grant
 - **WHEN** the owner revokes agent X for provider P
-- **THEN** the `can_use` tuple is deleted, a deny-list entry exists for X, X's Keycloak
-  offline sessions for that user are revoked, and a revocation signal is emitted — from the
-  one revoke action
+- **THEN** the `can_use` tuple is deleted, a deny-list entry exists for X on P, a revocation
+  signal is emitted, X's next request for P is refused, and X's other grants are unaffected
 
-#### Scenario: Revocation is scoped to the agent, not the human
-- **WHEN** the kill fan-out revokes the agent client's sessions/offline tokens
+#### Scenario: Re-acquiring the revoked grant is blocked even with a fresh token
+- **WHEN** a revoked agent obtains a brand-new user-bound token and requests the revoked
+  grant again
+- **THEN** the broker refuses before contacting the provider (the deny-list denies it), so a
+  fresh token is no re-acquisition path — no Keycloak session revocation is required to
+  protect the revoked grant
+
+### Requirement: Agent-wide kill revokes Keycloak sessions so the agent cannot re-acquire
+An agent-wide kill SHALL stop an agent entirely for a user: an agent-wide (null-provider)
+deny entry, deletion of every `can_use` tuple the agent holds on the user's grants, and
+revocation of the agent client's Keycloak sessions and offline/refresh tokens **for that
+user**, so the agent cannot obtain a new user-bound token to re-acquire any authority. It
+SHALL be scoped to the agent client — the human's own browser/SSO sessions SHALL be
+unaffected.
+
+#### Scenario: Killed agent cannot re-acquire any authority
+- **WHEN** an agent is killed agent-wide and then presents its offline/refresh token to mint
+  a fresh user-bound token for that user
+- **THEN** the refresh is refused, so the agent cannot re-acquire authority for any grant
+
+#### Scenario: The kill is scoped to the agent, not the human
+- **WHEN** the agent-wide kill revokes the agent client's sessions/offline tokens
 - **THEN** only the agent client's sessions for that user are revoked; the human's own
   browser/SSO sessions are unaffected
-
-### Requirement: The agent cannot re-acquire authority after revoke
-After revoke, the agent SHALL NOT be able to obtain a new user-bound token for that user —
-neither by refreshing an offline/refresh token nor by re-exchanging — so a stopped agent
-cannot re-acquire the authority it lost.
-
-#### Scenario: Offline token cannot re-mint
-- **WHEN** a revoked agent presents its offline/refresh token to mint a fresh user-bound
-  token for that user and re-exchange to `aud=token-broker`
-- **THEN** the attempt is refused; no fresh user-bound token is issued for that user
 
 ### Requirement: Propagation-free explicit stop via a deny-list
 Every provider-token hand-out SHALL refuse a request that matches a broker deny-list entry,

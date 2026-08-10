@@ -5,10 +5,11 @@
 ### Requirement: Per-agent revoke from the console
 The console SHALL offer per-agent consent revocation for the signed-in principal.
 Revocation from the console SHALL converge on the same broker code path and audit
-event as revocation from the consent surface, and SHALL invoke the M9 kill switch —
-so effect is within seconds (deny-list + Keycloak session/offline revocation), not only
-on the next hand-out. The console SHALL report the measured time-to-stop and the honest
-in-flight residual to the principal.
+event as revocation from the consent surface, and SHALL invoke the M9 per-grant kill
+(tuple delete + deny-list + revocation signal) — so effect is within seconds, not only
+on the next hand-out, and re-acquiring the grant is blocked even with a fresh token. The
+console SHALL report the measured time-to-stop and the honest in-flight residual to the
+principal.
 
 #### Scenario: One-click revoke tears up the delegation
 - **WHEN** the principal revokes agent X's consent for provider P from the console

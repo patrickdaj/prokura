@@ -32,8 +32,11 @@ DATABASE_URL = os.environ.get(
 OTLP_ENDPOINT = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://lgtm:4317")
 SERVICE_NAME = os.environ.get("OTEL_SERVICE_NAME", "token-broker")
 
-# Hand-out interval cap (TTL honesty — token-brokering spec).
-MAX_TTL_SECONDS = 900
+# Hand-out interval cap (TTL honesty — token-brokering spec). M9 lowers this to a
+# small, legible floor so the post-revocation in-flight residual (a provider token
+# already issued, which Prokura cannot un-issue at the mock provider) is small and
+# reported honestly rather than a full 15 minutes. Configurable per deployment.
+MAX_TTL_SECONDS = int(os.environ.get("BROKER_MAX_TTL_SECONDS", "120"))
 
 # M7 (D2): browser session on the consent surface.
 BROKER_PUBLIC_URL = os.environ.get("BROKER_PUBLIC_URL", "http://localhost:8110")
@@ -42,3 +45,7 @@ UI_CLIENT_SECRET = os.environ.get("UI_CLIENT_SECRET", "broker-ui-dev-secret")
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "broker-session-dev-secret")
 SESSION_COOKIE = "prokura_consent_session"
 SESSION_MAX_AGE = int(os.environ.get("SESSION_MAX_AGE", "1800"))
+
+# M9: HS256 signing key for the demo CAEP/SSF Security Event Tokens (single stream,
+# demo-grade — a multi-receiver RS256/JWKS transmitter is out of scope).
+SSF_SIGNING_SECRET = os.environ.get("SSF_SIGNING_SECRET", "prokura-ssf-dev-secret")

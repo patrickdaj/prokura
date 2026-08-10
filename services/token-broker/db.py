@@ -27,6 +27,20 @@ CREATE TABLE IF NOT EXISTS broker_audit (
     detail         text,
     ts             timestamptz NOT NULL DEFAULT now()
 );
+
+-- M9 kill switch: a propagation-free "stop now" checked on every hand-out. A row
+-- with provider IS NULL denies all of the agent's grants for that user (an
+-- agent-wide kill), independent of OpenFGA read state.
+CREATE TABLE IF NOT EXISTS broker_denylist (
+    agent      text        NOT NULL,
+    user_id    text        NOT NULL,
+    provider   text,
+    reason     text,
+    azp        text,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS broker_denylist_key
+    ON broker_denylist (agent, user_id, COALESCE(provider, ''));
 """
 
 
@@ -78,6 +92,41 @@ def delete_grant(user_id: str, provider: str) -> None:
             "DELETE FROM broker_grants WHERE user_id=%s AND provider=%s",
             (user_id, provider),
         )
+
+
+def add_deny(agent: str, user_id: str, provider: str | None, reason: str, azp: str) -> None:
+    """Write a deny-list entry (M9). provider=None is an agent-wide kill for the user."""
+    with connect() as conn:
+        conn.execute(
+            """INSERT INTO broker_denylist (agent, user_id, provider, reason, azp)
+               VALUES (%s, %s, %s, %s, %s)
+               ON CONFLICT (agent, user_id, COALESCE(provider, ''))
+               DO UPDATE SET reason = EXCLUDED.reason, azp = EXCLUDED.azp,
+                             created_at = now()""",
+            (agent, user_id, provider, reason, azp),
+        )
+
+
+def remove_deny(agent: str, user_id: str, provider: str | None) -> None:
+    """Clear a deny entry (e.g. on re-consent). Matches the exact grain written."""
+    with connect() as conn:
+        conn.execute(
+            "DELETE FROM broker_denylist WHERE agent=%s AND user_id=%s "
+            "AND COALESCE(provider,'')=COALESCE(%s,'')",
+            (agent, user_id, provider),
+        )
+
+
+def is_denied(agent: str, user_id: str, provider: str) -> bool:
+    """True if a deny entry matches this exact grant OR an agent-wide (null-provider)
+    entry for the user — the hand-out chain's propagation-free stop."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM broker_denylist WHERE agent=%s AND user_id=%s "
+            "AND (provider=%s OR provider IS NULL) LIMIT 1",
+            (agent, user_id, provider),
+        ).fetchone()
+    return row is not None
 
 
 def insert_audit(

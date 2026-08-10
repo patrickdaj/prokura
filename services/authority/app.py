@@ -246,10 +246,15 @@ def api_revoke(agent: str, provider: str, request: Request) -> JSONResponse:
         audit.emit("revoke_failed", user=sess["preferred_username"], agent=agent,
                    provider=provider, detail=f"{r.status_code}")
         raise _Http(502, "revoke_failed")
-    audit.emit("revoked", user=sess["preferred_username"], agent=agent, provider=provider)
-    # Honest about latency (M9 is instant propagation): effect on next hand-out.
+    # M9: the broker's kill switch returns a measured time-to-stop + the honest
+    # in-flight residual; relay them to the principal instead of a latency caveat.
+    body = r.json()
+    stop_ms = body.get("stop_ms")
+    residual = body.get("residual_seconds")
+    audit.emit("revoked", user=sess["preferred_username"], agent=agent, provider=provider,
+               detail=f"stop_ms={stop_ms}")
     return JSONResponse({"revoked": True, "agent": agent, "provider": provider,
-                         "note": "Effect applies on the agent's next token request."})
+                         "stop_ms": stop_ms, "residual_seconds": residual})
 
 
 # --- action: provider linking (D4) --------------------------------------------
