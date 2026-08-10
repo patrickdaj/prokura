@@ -119,7 +119,7 @@
 </style>
 
 <div class="rail"><div class="wrap">
-  <div class="mark">PROKURA</div>
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
   <div class="steps"><span class="cur">M0</span><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><a class="done" href="m3-human-approval.html" style="text-decoration:none">M3</a><i>·</i><a class="done" href="m4-mcp-authorization.html" style="text-decoration:none">M4</a><i>·</i><a class="done" href="m5-rag-authorization.html" style="text-decoration:none">M5</a><i>·</i><a class="done" href="m6-threat-model.html" style="text-decoration:none">M6</a><i>·</i><a class="done" href="m7-correct-parties.html" style="text-decoration:none">M7</a><i>·</i><a class="done" href="m8-authority-console.html" style="text-decoration:none">M8</a><i>·</i><a class="done" href="m9-instant-revocation.html" style="text-decoration:none">M9</a></div>
 </div></div>
 
@@ -258,10 +258,18 @@
       <div><div class="lab">Next milestone</div><a href="m1-token-exchange.html">M1 · Delegated Token Exchange →</a></div>
       <div style="text-align:right"><div class="lab">Foundation</div><span style="color:var(--ok)">Shipped &amp; archived</span></div>
     </div>
+    <div class="paths" style="margin-bottom:18px">
+      <b style="color:var(--muted)">Explore:</b>
+      <a href="../index.html">Home</a> &nbsp;·&nbsp;
+      <a href="../walkthroughs/index.html">Walkthroughs</a> &nbsp;·&nbsp;
+      <a href="https://github.com/patrickdaj/prokura/blob/main/docs/architecture.md">Architecture</a> &nbsp;·&nbsp;
+      <a href="https://github.com/patrickdaj/prokura/blob/main/docs/threat-model.md">Threat model</a> &nbsp;·&nbsp;
+      <a href="https://github.com/patrickdaj/prokura/tree/main/docs/adr">ADRs</a>
+    </div>
     <div class="paths">
       docker-compose.yml &nbsp;·&nbsp; the whole stack, one file<br>
       spike/ciba-http-channel/ &nbsp;·&nbsp; the M3-de-risking approval-channel spike<br>
-      openspec/specs/ &nbsp;·&nbsp; 8 capability contracts (identity-delegation, token-brokering, …)<br>
+      openspec/specs/ &nbsp;·&nbsp; 12 capability contracts (identity-delegation, token-brokering, revocation, …)<br>
       openspec/changes/archive/2026-08-06-establish-v02-baseline/ &nbsp;·&nbsp; the M0 change
     </div>
   </footer>

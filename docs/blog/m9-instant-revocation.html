@@ -104,7 +104,7 @@
 </style>
 
 <div class="rail"><div class="wrap">
-  <a class="mark" href="index.html" style="text-decoration:none">PROKURA</a>
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
   <div class="steps"><a class="done" href="index.html" style="text-decoration:none">M0</a><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><a class="done" href="m3-human-approval.html" style="text-decoration:none">M3</a><i>·</i><a class="done" href="m4-mcp-authorization.html" style="text-decoration:none">M4</a><i>·</i><a class="done" href="m5-rag-authorization.html" style="text-decoration:none">M5</a><i>·</i><a class="done" href="m6-threat-model.html" style="text-decoration:none">M6</a><i>·</i><a class="done" href="m7-correct-parties.html" style="text-decoration:none">M7</a><i>·</i><a class="done" href="m8-authority-console.html" style="text-decoration:none">M8</a><i>·</i><span class="cur">M9</span></div>
 </div></div>
 
@@ -165,6 +165,7 @@
       <div style="text-align:right"><div class="lab">The decision</div><a href="https://github.com/patrickdaj/prokura/blob/main/docs/adr/0024-the-kill-switch-instant-revocation-via-deny-list-and-keycloak.md">ADR-0024 →</a></div>
     </div>
     <div class="paths">
+      <b style="color:var(--muted)">Try it:</b> <a href="../walkthroughs/revocation.html">the kill switch walkthrough →</a><br>
       services/token-broker &nbsp;·&nbsp; deny-list + hand-out check + revocation.kill / kill_agent + CAEP/SSF (/ssf/stream)<br>
       bounded TTL (120 s) · prokura.revocation.stop_ms metric · services/authority reports the kill time + residual<br>
       spike/kill-switch — measured the three paths + residual &nbsp;·&nbsp; tests/smoke/test_revocation.py

@@ -104,7 +104,7 @@
 </style>
 
 <div class="rail"><div class="wrap">
-  <a class="mark" href="index.html" style="text-decoration:none">PROKURA</a>
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
   <div class="steps"><a class="done" href="index.html" style="text-decoration:none">M0</a><i>·</i><a class="done" href="m1-token-exchange.html" style="text-decoration:none">M1</a><i>·</i><a class="done" href="m2-token-broker.html" style="text-decoration:none">M2</a><i>·</i><a class="done" href="m3-human-approval.html" style="text-decoration:none">M3</a><i>·</i><a class="done" href="m4-mcp-authorization.html" style="text-decoration:none">M4</a><i>·</i><a class="done" href="m5-rag-authorization.html" style="text-decoration:none">M5</a><i>·</i><a class="done" href="m6-threat-model.html" style="text-decoration:none">M6</a><i>·</i><a class="done" href="m7-correct-parties.html" style="text-decoration:none">M7</a><i>·</i><span class="cur">M8</span></div>
 </div></div>
 
@@ -168,6 +168,7 @@
       <div style="text-align:right"><div class="lab">The decision</div><a href="https://github.com/patrickdaj/prokura/blob/main/docs/adr/0023-the-authority-console-is-an-aggregating-trusted-surface.md">ADR-0023 →</a></div>
     </div>
     <div class="paths">
+      <b style="color:var(--muted)">Try it:</b> <a href="../walkthroughs/authority.html">the The authority console walkthrough →</a><br>
       services/authority &nbsp;·&nbsp; :8160 · OIDC session + server-side tokens + RFC 8693 exchange (authority-ui / authority-console)<br>
       services/token-broker &nbsp;·&nbsp; /v1/consents + bearer /v1/consent/revoke &nbsp;·&nbsp; services/approval &nbsp;·&nbsp; /v1/my/approvals + /v1/my/topic<br>
       tests/smoke/humankit.py &nbsp;·&nbsp; the labeled simulated human, extended to :8160 &nbsp;·&nbsp; spike/authority-agg — the de-risk
