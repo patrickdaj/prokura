@@ -17,9 +17,20 @@ grant-acquisition, per-agent-consent specs).
 | `GET`  | `/login` · `/callback` · `/whoami` | OIDC session for the consent surface (M7: `broker-ui` client, signed cookie) |
 | `GET`  | `/consent` | per-agent consent screen (session-gated) |
 | `POST` | `/consent` | write the `can_use` tuple (the **sole writer**; owner = the session identity) |
-| `POST` | `/v1/consent/revoke` | revoke one agent's consent (session-only) |
+| `GET`  | `/v1/consents` | M8: list the signed-in user's per-agent consents + grants (user-bound bearer) |
+| `POST` | `/v1/consent/revoke` | M9 **kill switch**: per-grant revoke — tuple delete + deny-list entry + CAEP signal; returns a measured `stop_ms` + the honest in-flight residual (session OR user-bound bearer) |
+| `GET`  | `/ssf/stream` | M9: CAEP/SSF revocation Security Event Tokens a receiver can poll |
 
 ## The hand-out chain (`POST /v1/tokens/{provider}`)
+
+The hand-out validates, in order: JWKS signature, `aud=token-broker`, requested scopes ⊆
+grant, the OpenFGA `can_use` check, and (M9) **no matching deny-list entry** — a
+propagation-free "stop now" checked before the provider is contacted, so a revoked agent is
+refused even with a fresh token. Provider-token TTL is bounded (M9, 120 s default) so the
+post-revocation in-flight residual is small and reported honestly. Revocation comes in two
+grains (`revocation.py`): per-grant `kill` (tuple + deny + signal, scoped) and the agent-wide
+`kill_agent` (agent-wide deny + all tuples + Keycloak session/offline revocation via
+`manage-users`, so the agent can't re-acquire any authority — ADR-0024).
 
 1. **Validate the token** — JWKS signature + `aud=token-broker` (the F2 / confused-deputy
    defense; the inbound MCP token is never accepted here, so tools must re-exchange).

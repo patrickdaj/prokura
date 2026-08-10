@@ -90,16 +90,27 @@ tuple except through broker code.
 
 ## TTL honesty table
 
-The broker caps every hand-out at **900 s** (`expires_in ≤ 900`), regardless of
-the underlying provider token's real lifetime. Residual validity *beyond* the
-hand-out interval is provider-controlled and is stated here honestly — the broker
-never claims a provider token expires at 15 minutes.
+The broker caps every hand-out (M9 lowered the default to **120 s**, `expires_in ≤ 120`;
+configurable), regardless of the underlying provider token's real lifetime. Residual validity
+*beyond* the hand-out interval is provider-controlled and is stated here honestly — the broker
+never claims a provider token expires at the hand-out interval. **M9 revocation** denies *new*
+authority in low tens of milliseconds (tuple delete + deny-list check on every hand-out); the
+only window it cannot close is a provider token **already issued**, which stays valid at the
+provider until its bounded TTL — the "in-flight residual", reported on revoke rather than
+hidden. The mock `acme` provider has no revocation endpoint; real providers (GitHub/Google)
+that support token revocation close even this residual (M12).
 
 | Provider | Wired in v0 | Hand-out cap | Provider-side residual validity | Refresh |
 |----------|-------------|--------------|---------------------------------|---------|
-| `acme` (mock realm) | yes | 900 s | access token 3600 s; refresh credential lives with the acme SSO session (set to 30 days in the mock realm so the demo grant stays usable — a real provider's refresh token is not Keycloak-session-bound) | yes (`supports_refresh: true`) |
-| GitHub (GitHub App) | BYO extension | 900 s | user access token ~8 h | yes |
-| Google | BYO extension | 900 s | access token ~1 h | yes |
+| `acme` (mock realm) | yes | 120 s (M9) | access token 3600 s; refresh credential lives with the acme SSO session (set to 30 days in the mock realm so the demo grant stays usable — a real provider's refresh token is not Keycloak-session-bound). No provider-side revocation endpoint → the in-flight residual is the ≤120 s hand-out window | yes (`supports_refresh: true`) |
+| GitHub (GitHub App) | BYO extension | 120 s (M9) | user access token ~8 h; supports token revocation → M9 agent-wide kill can close the residual (M12) | yes |
+| Google | BYO extension | 120 s (M9) | access token ~1 h; supports token revocation (M12) | yes |
+
+**M9 residual (accepted):** the broker's service account holds realm-management
+`manage-users` to revoke an agent client's Keycloak consent/offline tokens for a user
+(agent-wide kill) — broader than ideal but the minimal role for consent management, far short
+of `realm-admin`, and used only for that call (ADR-0024). The demo SSF transmitter is a single
+in-memory HS256 stream; the SET also lands in the durable audit log.
 
 **Scope narrowing:** `acme` declares `supports_scope_narrowing: false`. A
 narrowing request within granted scopes returns the token with its *actual*

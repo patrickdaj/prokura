@@ -79,10 +79,10 @@
       by looking (screenshots of the measured kill time + residual), the tuple gone, the
       deny entry present, the Keycloak re-exchange refused, the CAEP SET in Loki, and the
       dashboard time-to-stop panel showing the number
-- [ ] 8.2 Update docs: architecture "kill switch" row / M9 marked delivered; the threat
+- [x] 8.2 Update docs: architecture "kill switch" row / M9 marked delivered; the threat
       model TTL/residual note; broker + revocation READMEs
-- [ ] 8.3 **M9 blog** (`docs/blog/m9-instant-revocation.html`) + blog index + landing card
-- [ ] 8.4 **Walkthrough** (`docs/walkthroughs/revocation.html`) with live screenshots
+- [x] 8.3 **M9 blog** (`docs/blog/m9-instant-revocation.html`) + blog index + landing card
+- [x] 8.4 **Walkthrough** (`docs/walkthroughs/revocation.html`) with live screenshots
       (register → revoke → measured stop + residual → dashboard panel) + index flowcard
-- [ ] 8.5 New ADR: the kill fan-out (tuple + Keycloak session/offline + deny-list), the
+- [x] 8.5 New ADR: the kill fan-out (tuple + Keycloak session/offline + deny-list), the
       propagation-free deny-list, and the honest in-flight residual

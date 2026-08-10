@@ -213,14 +213,14 @@ actually use**. Roughly ranked by leverage — the first three are the proposed 
    reinventing a proxy, but plugging Prokura's approval + brokering + data-layer authorization
    into a data plane's **external-authorization** hook.
 
-3. **Instant revocation & continuous evaluation (the kill switch).** TTL-as-only-revocation
-   is the biggest gap for real use. Revoking consent should *immediately* deny in-flight
-   authority — the per-hand-out consent-tuple check (already there) plus Keycloak
-   session/offline-token revocation plus a broker deny-list, propagated in seconds; the
-   standards-track version adopts **Shared Signals / CAEP** so revocation and risk events
-   become signals other systems can consume. "How fast can you make an agent stop?" is the
-   first question a security team asks; today the answer is "up to 15 minutes," and v1 can
-   make it "now."
+3. **Instant revocation & continuous evaluation (the kill switch).** ✅ **Delivered (M9).**
+   TTL-as-only-revocation was the biggest gap for real use. Revoking consent now *immediately*
+   denies authority — the per-hand-out consent-tuple check plus a broker **deny-list** (a
+   propagation-free stop) plus, for an agent-wide kill, Keycloak session/offline-token
+   revocation; a **CAEP** Security Event Token makes revocation a consumable signal. "How fast
+   can you make an agent stop?" — the answer moved from "up to 15 minutes" to **low tens of
+   milliseconds** for new authority, with the small in-flight residual named honestly
+   (ADR-0024).
 
 4. **Risk-tiered approval — beat approval fatigue.** Human-in-the-loop dies of fatigue: if
    everything needs a click, humans rubber-stamp and the control becomes theater. Make
@@ -332,14 +332,21 @@ lines for one principal, plus the exchange chain and console-initiated `idp_link
 reads the register and tears up a grant (verified by looking — tuple gone, audit line,
 refused hand-out) and connects a provider end-to-end with no admin API.
 
-**M9 — The kill switch** (thesis 3). Instant revocation and continuous evaluation:
-revocation propagates in seconds (per-hand-out consent check + Keycloak session/offline
-revocation + broker deny-list), every hand-out re-evaluated, CIBA **push mode** riding the
-same callback plumbing, and a **Shared Signals / CAEP** emitter so revocation and risk
-events are consumable signals. *Spike:* measure propagation latency of the three
-revocation paths before designing the deny-list. *New capability spec:* `revocation`.
-**Exit:** "how fast can you make an agent stop?" answered with a measured number in
-seconds, on the dashboard.
+**M9 — The kill switch** (thesis 3). ✅ **Delivered (`add-instant-revocation`).** Per-grant
+revoke now fans out to a `can_use` tuple delete **+ a broker deny-list** entry (a
+propagation-free stop checked on every hand-out, independent of FGA read state) **+ a CAEP
+Security Event Token** — instant and scoped, and re-acquiring the grant is blocked even with
+a fresh token. Provider-token TTL is bounded to 120 s so the in-flight residual (a token
+already handed out, which the mock provider can't revoke) is small and **reported honestly**.
+The broader **agent-wide kill** additionally revokes the agent client's Keycloak
+sessions/offline tokens for the user (`DELETE users/{id}/consents/{client}`, minimal role
+`manage-users`; the human's sessions untouched), so a killed agent can't re-acquire any
+authority (ADR-0024). The console shows the measured "denied in *X* ms; already-issued token
+expires within ≤ *N* s"; the dashboard graphs `prokura.revocation.stop_ms`. *Spike:*
+`spike/kill-switch` measured the three paths + residual against the live stack. *New
+capability spec:* `revocation`. **Exit met:** "how fast can you make an agent stop?" — new
+authority denied in **low tens of milliseconds**, on the dashboard, with the residual named.
+(CIBA push mode was scoped out — it serves approval latency, not the stop-an-agent exit.)
 
 **M10 — Gateway mode** (thesis 2). Prokura as the **external-authorization control plane**
 for a data plane: plug approval + brokering + consent decisions into agentgateway's

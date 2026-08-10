@@ -1,0 +1,84 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prokura Walkthrough — The Kill Switch</title>
+<link rel="stylesheet" href="walkthrough.css">
+<div class="rail"><div class="wrap">
+  <a class="mark" href="../index.html" style="text-decoration:none">PROKURA</a>
+  <div class="nav"><a href="index.html">← Walkthrough</a><a href="../blog/m9-instant-revocation.html">M9 blog</a></div>
+</div></div>
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Surface · the kill switch</p>
+    <h1>How fast can you make an agent stop?</h1>
+    <p class="thesis">M8 let you revoke a delegation; the console said <i>"effect on the agent's next request."</i> M9 turns that into a <b>measured number of milliseconds</b>. A per-grant revoke deletes the consent tuple, writes a broker <b>deny-list</b> entry, and emits a <b>CAEP</b> signal — instant and scoped. The one window it can't close — a provider token already handed out — it <b>bounds and reports</b>. Every screen below is captured live.</p>
+    <div class="meta"><span class="chip">deny-list</span><span class="chip">CAEP / SSF</span><span class="chip ok">measured stop</span><span class="chip ok">honest residual</span></div>
+  </header>
+  <hr>
+
+  <section><div class="stage"><div class="idx">01</div><div>
+    <h3>One click, a measured stop</h3>
+    <p>Revoking an agent from the console (or the M7 consent surface) runs the broker's kill: tuple delete + deny-list entry + CAEP signal. The console reports the <b>measured</b> time to deny new authority and the honest in-flight residual — no "next hand-out" hand-waving.</p>
+    <div class="screen pic trim"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:8160 — revoke, with a number</span></div>
+      <div class="body"><a href="img/revocation-killed.png" target="_blank" rel="noopener"><img src="img/revocation-killed.png" alt="The authority console after revoke: a green banner reads Revoked agent-app's access to acme. New authority denied in 12 ms. Any token already issued expires within ≤ 120 s."></a></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> revocation is instant and legible — a millisecond number, not a promise about the future.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">02</div><div>
+    <h3>The deny-list — a propagation-free "stop now"</h3>
+    <p>Every hand-out checks a broker deny-list <i>before</i> the provider is contacted, independent of any OpenFGA read consistency. So a revoked agent is refused even holding a <b>brand-new</b> user token — a fresh token is no way around revocation.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">the hand-out chain, after revoke</span></div>
+      <div class="body term"><pre><span class="p">$</span> revoke agent-app / acme     → tuple gone + deny-list entry + CAEP signal   <span class="c"># ~12 ms</span>
+<span class="p">$</span> tokens/acme  (fresh token)  → <span class="b">403 revoked</span>   <span class="c"># deny-list denies before contacting the provider</span>
+<span class="c"># re-acquiring the revoked grant is impossible without re-consent — no stale-token trick</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the stop does not depend on token expiry or FGA propagation — it is enforced on every request.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">03</div><div>
+    <h3>Honest about the one thing we can't kill</h3>
+    <p>A provider token <b>already</b> in the agent's hand keeps working at the provider until it expires — the mock <code>acme</code> has no revocation endpoint, and pretending otherwise would be a lie. So M9 bounds the hand-out TTL to 120 s and <b>reports</b> the residual instead of hiding it.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">the in-flight residual, disclosed</span></div>
+      <div class="body term"><pre>tokens/acme  → provider access token, <span class="g">expires_in=120</span>   <span class="c"># bounded, not 900</span>
+acme userinfo(token) → <span class="g">200</span>
+<span class="p">$</span> revoke everything
+acme userinfo(same token) → <span class="g">200</span>   <span class="c"># still valid until ≤120 s — reported, not falsely "revoked"</span>
+<span class="o">// real providers (GitHub/Google) support token revocation → this residual closes in M12</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the answer is honest — new authority stops in milliseconds; the small remaining window is named, per ADR-0003.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">04</div><div>
+    <h3>The agent-wide kill — it can't re-acquire</h3>
+    <p>To stop an agent <i>entirely</i>, the agent-wide kill also revokes the agent client's Keycloak sessions and offline/refresh tokens for that user — a targeted consent delete, needing only <code>manage-users</code>. A re-mint then fails; the human's own sessions are untouched. The spike proved the exact API and minimal role before any code.</p>
+    <div class="screen"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">Keycloak revocation, scoped to the agent</span></div>
+      <div class="body term"><pre>DELETE realms/prokura/users/{alice}/consents/<span class="g">agent-app</span>   → <span class="g">204</span>   <span class="c"># manage-users</span>
+refresh_token(agent-app)  → <span class="b">400 invalid_grant</span>   <span class="c"># can't re-acquire ANY authority</span>
+alice interactive sessions: before=3  after=3   <span class="o">// the human is not logged out</span></pre></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the offline-token persistence path is closed for a full kill, scoped to the agent client — never the human.</div>
+  </div></div></section>
+
+  <section><div class="stage"><div class="idx">05</div><div>
+    <h3>The answer, on the dashboard</h3>
+    <p>Every revoke records a <code>prokura.revocation.stop_ms</code> metric, joinable to its trace and audit line. "How fast can you make an agent stop?" now has a live answer.</p>
+    <div class="screen pic"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="u">localhost:3001 — time to stop</span></div>
+      <div class="body"><a href="img/revocation-dashboard.png" target="_blank" rel="noopener"><img src="img/revocation-dashboard.png" alt="Grafana panel titled Time to stop (ms) — how fast can you stop an agent, showing a line in the low tens of milliseconds"></a></div>
+    </div>
+    <div class="cap"><b>What it proves:</b> the security team's first question is answered with a number on the operator dashboard, not a shrug.</div>
+  </div></div></section>
+
+  <section>
+    <h2>What this surface guarantees</h2>
+    <ul class="checks">
+      <li><span class="ck">✓</span><span>A per-grant revoke denies <b>new authority in low tens of milliseconds</b> — tuple delete + a deny-list checked on every hand-out.</span></li>
+      <li><span class="ck">✓</span><span>Re-acquiring the revoked grant is <b>impossible with a fresh token</b> — the deny-list denies before the provider is contacted.</span></li>
+      <li><span class="ck">✓</span><span>The in-flight residual (a token already issued) is <b>bounded (≤120 s) and reported</b>, never falsely claimed revoked.</span></li>
+      <li><span class="ck">✓</span><span>The agent-wide kill revokes the agent's Keycloak sessions/offline tokens so it <b>can't re-acquire</b> — scoped to the agent, never the human.</span></li>
+      <li><span class="ck">✓</span><span>Revocation is emitted as a <b>CAEP Security Event Token</b> and measured on the dashboard.</span></li>
+    </ul>
+    <p style="margin-top:18px"></p>
+    <div class="callout">The kill fan-out, the propagation-free deny-list, the agent-wide Keycloak kill, and the honest in-flight residual are <b><a href="https://github.com/patrickdaj/prokura/blob/main/docs/adr/0024-the-kill-switch-instant-revocation-via-deny-list-and-keycloak.md">ADR-0024</a></b>.</div>
+  </section>
+  <footer><div class="nextlink"><div><div class="lab">Back to</div><a href="index.html">The full walkthrough →</a></div><div style="text-align:right"><div class="lab">Build log</div><a href="../blog/m9-instant-revocation.html">M9 blog →</a></div></div></footer>
+</div>
