@@ -45,7 +45,10 @@
 - [ ] 5.1 Remove `services/console/` (service, Dockerfile, index.html) and its `docker-compose.yml`
       service; remove `tests/smoke/test_console.py`
 - [ ] 5.2 Remove every `:8095` / bespoke-console reference in docs; rebase
-      `docs/walkthroughs/postmortem.html` on real Grafana/Tempo/Loki screenshots
+      `docs/walkthroughs/postmortem.html` on real Grafana/Tempo/Loki screenshots.
+      **Coordination:** `docs/index.html` is under concurrent edit by another agent — reconcile
+      its "faithful recreation" / "open the console" copy on top of that agent's final version
+      (see design §Coordination); do not edit it until then
 
 ## 6. Three-tier compose (profiles)
 

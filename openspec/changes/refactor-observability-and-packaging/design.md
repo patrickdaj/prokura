@@ -139,6 +139,15 @@ refs) once Grafana covers it; (4) tier the compose file and update README/`run`;
 walkthrough visuals. Rollback = git revert + clean compose up. No authorization or data-model
 change, so no runtime migration.
 
+## Coordination
+
+`docs/index.html` (the site landing) is under **concurrent edit by another agent**. Do NOT
+touch it until that work lands; then integrate this change's landing-page items **on top of
+the final version**, specifically: replace the "faithful recreation of each screen" language
+and remove "open the console" / any `:8095` reference (console decom, task 5.2), and confirm
+the walkthrough/telemetry links still point at the real-screenshot pages (task 7.x). Re-check
+its mobile layout after merge (task 7.3). Held pending that agent's completion.
+
 ## Open Questions
 
 - Shared telemetry home: a standalone `sdk/prokura-telemetry/` package vs a `telemetry`
